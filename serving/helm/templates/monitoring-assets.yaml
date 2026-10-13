@@ -1,0 +1,26 @@
+{{- if and .Values.platform.enabled (not .Values.bootstrap.enabled) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: airbnb-mlops-dashboards
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  airbnb-pricing-business-metrics.json: |-
+{{ .Files.Get "files/dashboards/airbnb-pricing-business-metrics.json" | nindent 4 }}
+  infrastructure-service-health.json: |-
+{{ .Files.Get "files/dashboards/infrastructure-service-health.json" | nindent 4 }}
+  model-drift-health.json: |-
+{{ .Files.Get "files/dashboards/model-drift-health.json" | nindent 4 }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: airbnb-ml-observability
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+{{ .Files.Get "files/airbnb-alerts.yml" | nindent 2 }}
+{{- end }}

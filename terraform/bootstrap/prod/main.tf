@@ -41,6 +41,18 @@ resource "aws_s3_bucket_ownership_controls" "terraform_state" {
   }
 }
 
+resource "aws_iam_openid_connect_provider" "github" {
+  count = var.github_repository == null ? 0 : 1
+
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = [data.tls_certificate.github[0].certificates[0].sha1_fingerprint]
+
+  tags = merge(local.common_tags, {
+    Name = "github-actions"
+  })
+}
+
 data "aws_iam_policy_document" "terraform_execution_assume_role" {
   statement {
     sid     = "TrustedOperators"
@@ -64,7 +76,7 @@ data "aws_iam_policy_document" "terraform_execution_assume_role" {
       principals {
         type = "Federated"
         identifiers = [
-          "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
+          aws_iam_openid_connect_provider.github[0].arn
         ]
       }
 
@@ -79,7 +91,8 @@ data "aws_iam_policy_document" "terraform_execution_assume_role" {
         variable = "token.actions.githubusercontent.com:sub"
         values = [
           "repo:${statement.value}:ref:refs/heads/main",
-          "repo:${statement.value}:ref:refs/tags/v*"
+          "repo:${statement.value}:ref:refs/tags/v*",
+          "repo:${statement.value}:environment:${var.github_environment}"
         ]
       }
     }
@@ -148,6 +161,8 @@ data "aws_iam_policy_document" "terraform_execution" {
       "kms:*",
       "logs:*",
       "rds:*",
+      "elasticache:*",
+      "secretsmanager:*",
     ]
 
     resources = ["*"]
@@ -165,6 +180,8 @@ data "aws_iam_policy_document" "terraform_execution" {
     actions = [
       "route53:ChangeResourceRecordSets",
       "route53:ChangeTagsForResource",
+      "route53:CreateHostedZone",
+      "route53:DeleteHostedZone",
       "route53:GetChange",
       "route53:GetHostedZone",
       "route53:ListHostedZones",
@@ -174,6 +191,36 @@ data "aws_iam_policy_document" "terraform_execution" {
     ]
 
     resources = ["*"]
+  }
+
+  statement {
+    sid    = "ManageEnvironmentDataBuckets"
+    effect = "Allow"
+    actions = [
+      "s3:CreateBucket",
+      "s3:DeleteBucket",
+      "s3:GetBucketLocation",
+      "s3:GetBucketPolicy",
+      "s3:GetBucketObjectLockConfiguration",
+      "s3:GetBucketPublicAccessBlock",
+      "s3:GetBucketTagging",
+      "s3:GetBucketVersioning",
+      "s3:GetEncryptionConfiguration",
+      "s3:GetLifecycleConfiguration",
+      "s3:ListBucket",
+      "s3:PutBucketPolicy",
+      "s3:DeleteBucketPolicy",
+      "s3:PutBucketObjectLockConfiguration",
+      "s3:PutBucketPublicAccessBlock",
+      "s3:PutBucketTagging",
+      "s3:PutBucketVersioning",
+      "s3:PutEncryptionConfiguration",
+      "s3:PutLifecycleConfiguration",
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:s3:::${local.name_prefix}-*",
+    ]
   }
 
   statement {
@@ -239,19 +286,30 @@ data "aws_iam_policy_document" "terraform_execution" {
   }
 
   statement {
-    sid     = "CreateEksServiceLinkedRoles"
+    sid     = "CreatePlatformServiceLinkedRoles"
     effect  = "Allow"
     actions = ["iam:CreateServiceLinkedRole"]
 
     resources = [
       "arn:${data.aws_partition.current.partition}:iam::*:role/aws-service-role/eks.amazonaws.com/AWSServiceRoleForAmazonEKS",
       "arn:${data.aws_partition.current.partition}:iam::*:role/aws-service-role/eks-nodegroup.amazonaws.com/AWSServiceRoleForAmazonEKSNodegroup",
+      "arn:${data.aws_partition.current.partition}:iam::*:role/aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS",
+      "arn:${data.aws_partition.current.partition}:iam::*:role/aws-service-role/elasticache.amazonaws.com/AWSServiceRoleForElastiCache",
+      "arn:${data.aws_partition.current.partition}:iam::*:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling",
+      "arn:${data.aws_partition.current.partition}:iam::*:role/aws-service-role/spot.amazonaws.com/AWSServiceRoleForEC2Spot",
     ]
 
     condition {
       test     = "StringEquals"
       variable = "iam:AWSServiceName"
-      values   = ["eks.amazonaws.com", "eks-nodegroup.amazonaws.com"]
+      values = [
+        "autoscaling.amazonaws.com",
+        "elasticache.amazonaws.com",
+        "eks.amazonaws.com",
+        "eks-nodegroup.amazonaws.com",
+        "rds.amazonaws.com",
+        "spot.amazonaws.com",
+      ]
     }
   }
 
@@ -284,4 +342,78 @@ resource "aws_iam_role_policy" "terraform_execution" {
   name   = "${local.name_prefix}-terraform-platform"
   role   = aws_iam_role.terraform_execution.id
   policy = data.aws_iam_policy_document.terraform_execution.json
+}
+
+data "aws_iam_policy_document" "github_ecr_publish_assume_role" {
+  count = var.github_repository == null ? 0 : 1
+
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github[0].arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["repo:${var.github_repository}:environment:${var.github_environment}"]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_ecr_publish" {
+  count = var.github_repository == null ? 0 : 1
+
+  name                 = "${local.name_prefix}-github-ecr-publish"
+  description          = "Publish immutable production images from the protected GitHub Environment"
+  assume_role_policy   = data.aws_iam_policy_document.github_ecr_publish_assume_role[0].json
+  max_session_duration = 3600
+  tags                 = local.common_tags
+}
+
+data "aws_iam_policy_document" "github_ecr_publish" {
+  count = var.github_repository == null ? 0 : 1
+
+  statement {
+    sid       = "AuthenticateToEcr"
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "PublishProductionImages"
+    effect = "Allow"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:CompleteLayerUpload",
+      "ecr:DescribeImages",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:InitiateLayerUpload",
+      "ecr:PutImage",
+      "ecr:UploadLayerPart",
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/${local.name_prefix}-serving",
+      "arn:${data.aws_partition.current.partition}:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/${local.name_prefix}-training",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "github_ecr_publish" {
+  count = var.github_repository == null ? 0 : 1
+
+  name   = "publish-production-images"
+  role   = aws_iam_role.github_ecr_publish[0].id
+  policy = data.aws_iam_policy_document.github_ecr_publish[0].json
 }

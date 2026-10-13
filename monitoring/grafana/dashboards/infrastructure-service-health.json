@@ -1,0 +1,51 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "type": "stat", "title": "Ready replicas", "id": 1,
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(airbnb_readiness)", "refId": "A"}],
+      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+    },
+    {
+      "type": "timeseries", "title": "Prediction request rate", "id": 2,
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(rate(airbnb_http_requests_total{endpoint=\"/predict\"}[5m]))", "legendFormat": "requests/s", "refId": "A"}],
+      "gridPos": {"h": 8, "w": 9, "x": 6, "y": 0}
+    },
+    {
+      "type": "timeseries", "title": "Prediction error rate", "id": 3,
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(rate(airbnb_http_requests_total{endpoint=\"/predict\",status=~\"5..\"}[5m])) / clamp_min(sum(rate(airbnb_http_requests_total{endpoint=\"/predict\"}[5m])), 0.001)", "legendFormat": "error ratio", "refId": "A"}],
+      "gridPos": {"h": 8, "w": 9, "x": 15, "y": 0}
+    },
+    {
+      "type": "timeseries", "title": "Prediction latency percentiles", "id": 4,
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "histogram_quantile(0.50, sum by (le) (rate(airbnb_prediction_latency_seconds_bucket[5m])))", "legendFormat": "p50", "refId": "A"},
+        {"expr": "histogram_quantile(0.95, sum by (le) (rate(airbnb_prediction_latency_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "B"},
+        {"expr": "histogram_quantile(0.99, sum by (le) (rate(airbnb_prediction_latency_seconds_bucket[5m])))", "legendFormat": "p99", "refId": "C"}
+      ],
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 8}
+    },
+    {
+      "type": "timeseries", "title": "CPU and memory", "id": 5,
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(rate(container_cpu_usage_seconds_total{container=\"inference\"}[5m]))", "legendFormat": "CPU cores", "refId": "A"},
+        {"expr": "sum(container_memory_working_set_bytes{container=\"inference\"})", "legendFormat": "memory bytes", "refId": "B"}
+      ],
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 8}
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["airbnb", "infrastructure", "serving"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "title": "Airbnb Infrastructure and Service Health",
+  "uid": "airbnb-service-health",
+  "version": 1
+}

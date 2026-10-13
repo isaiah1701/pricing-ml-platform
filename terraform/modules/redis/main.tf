@@ -57,14 +57,14 @@ resource "aws_vpc_security_group_ingress_rule" "cidr" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "security_group" {
-  for_each = toset(var.allowed_security_group_ids)
+  count = length(var.allowed_security_group_ids)
 
   security_group_id            = aws_security_group.this.id
-  description                  = "Redis access from ${each.value}"
+  description                  = "Redis access from security group ${count.index + 1}"
   ip_protocol                  = "tcp"
   from_port                    = var.port
   to_port                      = var.port
-  referenced_security_group_id = each.value
+  referenced_security_group_id = var.allowed_security_group_ids[count.index]
 
   tags = local.resource_tags
 }

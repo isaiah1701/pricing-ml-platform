@@ -10,8 +10,32 @@ import pytest
 from mlflow.entities import Run
 
 from scripts.register_model import find_logged_model, get_required_run_id
+from training.registry import tag_version_before_alias
 
 LOGGER = logging.getLogger(__name__)
+
+
+class FakeAliasClient:
+    """Record Registry writes and optionally fail one metadata operation."""
+
+    def __init__(self, fail_key: str | None = None) -> None:
+        """Store the optional failing tag and an ordered mutation log."""
+        self.fail_key = fail_key
+        self.calls: list[tuple[str, ...]] = []
+
+    def set_model_version_tag(
+        self, name: str, version: str, key: str, value: str
+    ) -> None:
+        """Record a tag write or raise before it can expose an alias."""
+        self.calls.append(("tag", name, version, key, value))
+        if key == self.fail_key:
+            raise RuntimeError("tag write failed")
+
+    def set_registered_model_alias(
+        self, name: str, alias: str, version: str
+    ) -> None:
+        """Record the final alias publication."""
+        self.calls.append(("alias", name, alias, version))
 
 
 def test_champion_run_id_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -62,3 +86,30 @@ def test_find_logged_model_resolves_actual_mlflow3_artifact(
         ),
     )
     assert find_logged_model(run).model_id == "new"
+
+
+def test_governance_tags_are_written_before_alias() -> None:
+    """Expose a version only after every required metadata write succeeds."""
+    client = FakeAliasClient()
+    tag_version_before_alias(
+        client,
+        "prices",
+        "7",
+        "champion",
+        {"release_bundle_id": "bundle", "dataset_sha256": "dataset"},
+    )
+    assert [call[0] for call in client.calls] == ["tag", "tag", "alias"]
+
+
+def test_failed_governance_tag_never_moves_alias() -> None:
+    """Leave aliases unchanged when any provenance tag cannot be persisted."""
+    client = FakeAliasClient(fail_key="dataset_sha256")
+    with pytest.raises(RuntimeError, match="tag write failed"):
+        tag_version_before_alias(
+            client,
+            "prices",
+            "7",
+            "champion",
+            {"release_bundle_id": "bundle", "dataset_sha256": "dataset"},
+        )
+    assert all(call[0] != "alias" for call in client.calls)

@@ -4,7 +4,6 @@ import logging
 
 from scripts.read_online_features import has_materialized_features
 
-
 LOGGER = logging.getLogger(__name__)
 
 

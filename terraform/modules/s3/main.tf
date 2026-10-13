@@ -1,6 +1,51 @@
 resource "aws_s3_bucket" "this" {
-  bucket = var.bucket_name
-  tags   = var.tags
+  bucket              = var.bucket_name
+  object_lock_enabled = var.object_lock_enabled
+  tags                = var.tags
+}
+
+resource "aws_s3_bucket_object_lock_configuration" "this" {
+  count = var.object_lock_enabled ? 1 : 0
+
+  bucket = aws_s3_bucket.this.id
+
+  rule {
+    default_retention {
+      mode = "GOVERNANCE"
+      days = var.object_lock_retention_days
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.this]
+}
+
+data "aws_iam_policy_document" "tls_only" {
+  statement {
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    actions = ["s3:*"]
+    resources = [
+      aws_s3_bucket.this.arn,
+      "${aws_s3_bucket.this.arn}/*",
+    ]
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "tls_only" {
+  bucket = aws_s3_bucket.this.id
+  policy = data.aws_iam_policy_document.tls_only.json
 }
 
 resource "aws_s3_bucket_public_access_block" "this" {

@@ -1,0 +1,111 @@
+{{- if and .Values.platform.enabled (not .Values.bootstrap.enabled) }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.platform.mlflow.serviceAccountName }}
+  namespace: {{ .Values.platform.mlflow.namespace }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+  namespace: {{ .Values.platform.mlflow.namespace }}
+spec:
+  replicas: {{ .Values.platform.mlflow.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mlflow
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mlflow
+    spec:
+      serviceAccountName: {{ .Values.platform.mlflow.serviceAccountName }}
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mlflow
+          image: {{ printf "%s:%s" (required "trainingImage.repository is required" .Values.trainingImage.repository) (required "trainingImage.tag is required" .Values.trainingImage.tag) | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["mlflow"]
+          args:
+            - server
+            - --serve-artifacts
+            - --artifacts-destination
+            - {{ required "platform.mlflow.artifactRoot is required" .Values.platform.mlflow.artifactRoot | quote }}
+            - --host
+            - 0.0.0.0
+            - --port
+            - "5000"
+            - --allowed-hosts
+            - mlflow,mlflow:5000,mlflow.mlflow.svc.cluster.local,mlflow.mlflow.svc.cluster.local:5000
+          envFrom:
+            - secretRef:
+                name: mlflow-database
+          env:
+            - name: AWS_REGION
+              value: {{ .Values.platform.awsRegion | quote }}
+            - name: MLFLOW_DISABLE_AGENT_HINT
+              value: "1"
+          ports:
+            - name: http
+              containerPort: 5000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.platform.mlflow.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: temporary-files
+              mountPath: /tmp
+      nodeSelector:
+        workload: system
+      volumes:
+        - name: temporary-files
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow
+  namespace: {{ .Values.platform.mlflow.namespace }}
+spec:
+  selector:
+    app.kubernetes.io/name: mlflow
+  ports:
+    - name: http
+      port: 5000
+      targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mlflow
+  namespace: {{ .Values.platform.mlflow.namespace }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mlflow
+{{- end }}

@@ -1,0 +1,26 @@
+{{- if and .Values.platform.enabled (not .Values.bootstrap.enabled) }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.platform.mlflow.namespace }}
+  labels:
+    app.kubernetes.io/part-of: prod-mlops-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.platform.airflow.namespace }}
+  labels:
+    app.kubernetes.io/part-of: prod-mlops-platform
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+{{- end }}

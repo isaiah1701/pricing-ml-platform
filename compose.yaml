@@ -1,3 +1,5 @@
+name: mlops-platform
+
 services:
   redis:
     image: redis:7.4-alpine
@@ -14,5 +16,198 @@ services:
       retries: 10
     restart: unless-stopped
 
+  mlflow:
+    build:
+      context: .
+      dockerfile: training/Dockerfile
+    image: mlops-platform-training:local
+    container_name: mlops-mlflow
+    # Root inside rootless Docker maps to the host account that owns local state.
+    user: "0:0"
+    command:
+      - mlflow
+      - server
+      - --backend-store-uri
+      - sqlite:////var/lib/mlflow/mlflow.db
+      - --default-artifact-root
+      - /home/imich/learning/mlopsSystem/mlruns
+      - --host
+      - 0.0.0.0
+      - --allowed-hosts
+      - localhost,localhost:5000,127.0.0.1,127.0.0.1:5000,mlflow,mlflow:5000,host.docker.internal
+      - --port
+      - "5000"
+    environment:
+      MLFLOW_DISABLE_AGENT_HINT: "1"
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount the containing directory so SQLite can create its journal/WAL files.
+      - ./mlflow-data:/var/lib/mlflow
+      - ./mlruns:/home/imich/learning/mlopsSystem/mlruns
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3).read()
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: serving/app/Dockerfile
+    image: mlops-platform-serving:local
+    container_name: mlops-api
+    # Root inside rootless Docker maps to the host account that owns local MLflow artifacts.
+    user: "0:0"
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_NAME: airbnb-price-predictor
+      MODEL_ALIAS: champion
+      MODEL_REFRESH_INTERVAL_SECONDS: "60"
+      LOG_LEVEL: INFO
+      MLFLOW_DISABLE_AGENT_HINT: "1"
+    ports:
+      - "8080:8000"
+    volumes:
+      - ./mlruns:/home/imich/learning/mlopsSystem/mlruns
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: mlops-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/airbnb-alerts.yml:/etc/prometheus/airbnb-alerts.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - api
+      - node-exporter
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --spider
+        - http://127.0.0.1:9090/-/healthy
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    container_name: mlops-node-exporter
+    command:
+      - --collector.textfile.directory=/var/lib/node_exporter/textfile_collector
+    ports:
+      - "9100:9100"
+    volumes:
+      - monitoring-metrics:/var/lib/node_exporter/textfile_collector:ro
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    container_name: mlops-grafana
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: light
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget --quiet --spider http://127.0.0.1:3000/api/health || exit 1
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  airflow:
+    build:
+      context: .
+      dockerfile: training/Dockerfile
+    image: mlops-platform-training:local
+    container_name: mlops-airflow
+    # Root inside rootless Docker maps to the host account that owns MLflow artifacts.
+    user: "0:0"
+    command: ["airflow", "standalone"]
+    environment:
+      AIRFLOW_HOME: /opt/airflow
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: admin:admin
+      AIRFLOW__API__BASE_URL: http://localhost:8081
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      REDIS_CONNECTION_STRING: redis:6379
+      AIRBNB_RAW_DATA_PATH: /app/data/AB_NYC_2019.csv
+      AIRBNB_FEATURE_DATA_PATH: /opt/airflow/work/listing_features.parquet
+      AIRBNB_FEATURE_REPO_PATH: /app/feature_repo
+      AIRBNB_VERIFY_SCRIPT_PATH: /app/scripts/verify_feature_store.py
+      AIRBNB_SNAPSHOT_ROOT: /opt/airflow/data-snapshots
+      DRIFT_REFERENCE_PATH: /app/data/listing_features.parquet
+      DRIFT_PRODUCTION_PATH: /app/data/production_features.parquet
+      DRIFT_PROMETHEUS_METRICS_PATH: /opt/airflow/monitoring-metrics/drift.prom
+      MODEL_QUALITY_OUTCOMES_PATH: /app/data/model_outcomes.parquet
+      MODEL_QUALITY_PROMETHEUS_METRICS_PATH: /opt/airflow/monitoring-metrics/model_quality.prom
+      MODEL_QUALITY_REFERENCE_MAE_DOLLARS: "54.67"
+      SERVING_URL: http://api:8000
+      MLFLOW_DISABLE_AGENT_HINT: "1"
+    ports:
+      - "8081:8080"
+    volumes:
+      - airflow-data:/opt/airflow
+      - monitoring-metrics:/opt/airflow/monitoring-metrics
+      - ./pipelines:/opt/airflow/dags/pipelines:ro
+      - ./retraining:/opt/airflow/dags/retraining:ro
+      - ./data:/app/data:ro
+      - ./mlruns:/home/imich/learning/mlopsSystem/mlruns
+    depends_on:
+      redis:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+      api:
+        condition: service_started
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080', timeout=3).read()
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
+  airflow-data:
+  grafana-data:
+  monitoring-metrics:
+  prometheus-data:
   redis-data:
+    name: mlopssystem_redis-data

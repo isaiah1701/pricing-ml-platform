@@ -8,7 +8,6 @@ import pandas as pd
 from training.preprocessing.clean import DEFAULT_DATA_PATH, clean_listings
 from training.preprocessing.transform import OUTPUT_COLUMNS, transform_features
 
-
 LOGGER = logging.getLogger(__name__)
 DEFAULT_OUTPUT_PATH = (
     Path(__file__).resolve().parents[2] / "data" / "listing_features.parquet"

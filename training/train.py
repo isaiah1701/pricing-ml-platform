@@ -19,17 +19,31 @@ from catboost import CatBoostRegressor
 from feast import FeatureStore
 from feast.errors import FeatureServiceNotFoundException
 from feast.feature_service import FeatureService
+from mlflow import MlflowClient
 from mlflow.models import infer_signature
 from sklearn.base import BaseEstimator, RegressorMixin
+from sklearn.dummy import DummyRegressor
 from sklearn.metrics import mean_absolute_error, r2_score, root_mean_squared_error
 from sklearn.model_selection import train_test_split
 from sklearn.utils.validation import check_is_fitted
+
+from training.lineage import (
+    load_lineage_manifest,
+    publish_dataset_snapshot,
+    resolve_git_commit,
+    sha256_file,
+    verify_dataset_snapshot,
+)
+from training.provenance import CodeProvenance, build_code_snapshot, sha256_directory
+from training.validation import require_valid_dataset
 
 LOGGER = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FEATURE_REPO_PATH = PROJECT_ROOT / "feature_repo"
 DEFAULT_DATA_PATH = PROJECT_ROOT / "data" / "listing_features.parquet"
+DEFAULT_RAW_DATA_PATH = PROJECT_ROOT / "data" / "AB_NYC_2019.csv"
+DEFAULT_SNAPSHOT_ROOT = PROJECT_ROOT / "data" / "snapshots"
 FEATURE_SERVICE_NAME = "airbnb_price_model_v1"
 EXPERIMENT_NAME = "airbnb-price-prediction"
 MODEL_NAME = "catboost_log_price_seed_ensemble"
@@ -49,13 +63,15 @@ EXCLUDED_FEATURES: frozenset[str] = frozenset(
 )
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
-HASH_CHUNK_SIZE = 1024 * 1024
 ENSEMBLE_RANDOM_STATES: tuple[int, ...] = (42, 7, 123)
 ENSEMBLE_ITERATIONS: tuple[int, ...] = (1440, 1565, 1589)
 LEARNING_RATE = 0.04
 TREE_DEPTH = 10
 L2_LEAF_REG = 8.0
 RANDOM_STRENGTH = 1.0
+CODE_SNAPSHOT_DIRECTORY = Path(
+    os.getenv("AIRBNB_CODE_SNAPSHOT_DIR", "/tmp/airbnb-code-snapshots")
+)
 
 
 def load_labels(data_path: Path) -> pd.DataFrame:
@@ -351,14 +367,253 @@ def evaluate_segments(
 
 def get_dataset_version(data_path: Path) -> str:
     """Return a deterministic SHA-256 digest of the transformed dataset."""
-    if not data_path.is_file():
-        LOGGER.error("Cannot version missing dataset: %s", data_path)
-        raise FileNotFoundError(f"Transformed Parquet dataset not found: {data_path}")
-    digest = hashlib.sha256()
-    with data_path.open("rb") as dataset_file:
-        while chunk := dataset_file.read(HASH_CHUNK_SIZE):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return sha256_file(data_path)
+
+
+def get_git_sha(project_root: Path = PROJECT_ROOT) -> str:
+    """Return the checked-out Git commit SHA, or ``unknown`` when unavailable."""
+    return resolve_git_commit(project_root)
+
+
+def create_training_attempt(
+    tracking_uri: str,
+    experiment_name: str,
+    pipeline_name: str,
+) -> str:
+    """Create a parent MLflow run before any fallible training work begins."""
+    mlflow.set_tracking_uri(tracking_uri)
+    experiment = mlflow.set_experiment(experiment_name)
+    client = MlflowClient(tracking_uri=tracking_uri)
+    created = client.create_run(
+        experiment.experiment_id,
+        tags={
+            "mlflow.runName": f"{pipeline_name}_attempt",
+            "run_type": "training_attempt",
+            "pipeline_name": pipeline_name,
+            "attempt_stage": "started",
+            "attempt_outcome": "running",
+        },
+    )
+    LOGGER.info("Created training-attempt run %s", created.info.run_id)
+    return str(created.info.run_id)
+
+
+def update_training_attempt(
+    tracking_uri: str,
+    run_id: str,
+    stage: str,
+    *,
+    outcome: str = "running",
+    error: BaseException | None = None,
+) -> None:
+    """Update and, when final, terminate a parent training-attempt run."""
+    client = MlflowClient(tracking_uri=tracking_uri)
+    client.set_tag(run_id, "attempt_stage", stage)
+    client.set_tag(run_id, "attempt_outcome", outcome)
+    if error is not None:
+        client.set_tag(run_id, "failure_type", type(error).__name__)
+        client.set_terminated(run_id, status="FAILED")
+        LOGGER.error("Training attempt %s failed during %s", run_id, stage)
+    elif outcome in {"registered", "rejected", "completed"}:
+        client.set_terminated(run_id, status="FINISHED")
+        LOGGER.info("Training attempt %s finished with outcome %s", run_id, outcome)
+
+
+def _log_lineage_manifest(
+    lineage_manifest_path: str | Path | None,
+    dataset_version: str,
+) -> str | None:
+    """Verify and attach an immutable dataset plus lineage to the active run."""
+    if lineage_manifest_path is None:
+        LOGGER.warning("Training run has no dataset lineage manifest")
+        return None
+    resolved_path = Path(lineage_manifest_path).expanduser().resolve()
+    manifest = load_lineage_manifest(resolved_path)
+    dataset = manifest.get("dataset")
+    if not isinstance(dataset, dict) or dataset.get("sha256") != dataset_version:
+        LOGGER.error("Lineage manifest does not identify the training dataset")
+        raise ValueError("Lineage manifest dataset hash does not match training data")
+    lineage_id = str(manifest["lineage_id"])
+    mlflow.set_tags(
+        {
+            "dataset_lineage_id": lineage_id,
+            "dataset_snapshot_id": dataset_version,
+        }
+    )
+    mlflow.log_artifact(str(resolved_path), artifact_path="lineage")
+    snapshot_path_value = dataset.get("path")
+    if not isinstance(snapshot_path_value, str):
+        raise TypeError("Lineage manifest does not contain a dataset snapshot path")
+    snapshot_path = Path(snapshot_path_value).expanduser().resolve()
+    verify_dataset_snapshot(snapshot_path, dataset_version)
+    mlflow.log_artifact(str(snapshot_path), artifact_path="data")
+    return lineage_id
+
+
+def _log_code_provenance() -> CodeProvenance:
+    """Capture and upload the exact source and dependency files for a run."""
+    provenance = build_code_snapshot(PROJECT_ROOT, CODE_SNAPSHOT_DIRECTORY)
+    mlflow.set_tags(
+        {
+            "git_sha": provenance["git_commit"],
+            "mlflow.source.git.commit": provenance["git_commit"],
+            "git_dirty": str(provenance["git_dirty"]).lower(),
+            "git_state_available": str(
+                provenance["git_state_available"]
+            ).lower(),
+            "code_sha256": provenance["code_sha256"],
+        }
+    )
+    mlflow.log_params(
+        {
+            "code_sha256": provenance["code_sha256"],
+            "code_file_count": provenance["file_count"],
+        }
+    )
+    mlflow.log_artifact(provenance["archive_path"], artifact_path="code")
+    return provenance
+
+
+def _log_release_bundle(
+    *,
+    run_id: str,
+    model_uri: str,
+    model_artifact_sha256: str,
+    dataset_sha256: str,
+    lineage_id: str | None,
+    code_provenance: CodeProvenance,
+    feature_service_name: str,
+    training_attempt_id: str | None,
+) -> str:
+    """Log one identity binding code, data, model, and the parent attempt."""
+    bundle_body: dict[str, object] = {
+        "training_attempt_id": training_attempt_id,
+        "mlflow_run_id": run_id,
+        "model_uri": model_uri,
+        "model_artifact_sha256": model_artifact_sha256,
+        "dataset_sha256": dataset_sha256,
+        "dataset_lineage_id": lineage_id,
+        "code_sha256": code_provenance["code_sha256"],
+        "git_commit": code_provenance["git_commit"],
+        "git_dirty": code_provenance["git_dirty"],
+        "git_state_available": code_provenance["git_state_available"],
+        "feature_service_name": feature_service_name,
+    }
+    canonical = json.dumps(
+        bundle_body, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    bundle_id = hashlib.sha256(canonical).hexdigest()
+    mlflow.set_tag("release_bundle_id", bundle_id)
+    mlflow.set_tag("model_artifact_sha256", model_artifact_sha256)
+    mlflow.log_dict(
+        {"release_bundle_id": bundle_id, **bundle_body},
+        "provenance/release_bundle.json",
+    )
+    if training_attempt_id is not None:
+        client = MlflowClient()
+        for key, value in {
+            "release_bundle_id": bundle_id,
+            "model_run_id": run_id,
+            "code_sha256": code_provenance["code_sha256"],
+            "dataset_sha256": dataset_sha256,
+            "model_artifact_sha256": model_artifact_sha256,
+        }.items():
+            client.set_tag(training_attempt_id, key, value)
+    return bundle_id
+
+
+def train_baseline(y_train: pd.Series) -> DummyRegressor:
+    """Fit a median-price baseline for direct experiment comparison."""
+    LOGGER.info("Fitting median-price baseline")
+    baseline = DummyRegressor(strategy="median")
+    baseline.fit(np.zeros((len(y_train), 1)), y_train)
+    return baseline
+
+
+def log_model_run(
+    model: BaseEstimator,
+    x_train: pd.DataFrame,
+    x_test: pd.DataFrame,
+    metrics: dict[str, float],
+    *,
+    run_name: str,
+    model_family: str,
+    dataset_version: str,
+    git_sha: str,
+    feature_service_name: str,
+    parameters: dict[str, object],
+    evaluation_report: dict[str, object],
+    baseline: bool = False,
+    lineage_manifest_path: str | Path | None = None,
+    training_attempt_id: str | None = None,
+) -> dict[str, object]:
+    """Log a fitted model and provenance, then verify artifact reload."""
+    with mlflow.start_run(run_name=run_name) as run:
+        tags = {
+            "model_family": model_family,
+            "baseline": str(baseline).lower(),
+            "git_sha": git_sha,
+            "mlflow.source.git.commit": git_sha,
+            "artifact_reload_verified": "pending",
+        }
+        if training_attempt_id is not None:
+            tags["mlflow.parentRunId"] = training_attempt_id
+            tags["training_attempt_id"] = training_attempt_id
+        mlflow.set_tags(tags)
+        mlflow.log_params(
+            {
+                **parameters,
+                "dataset_sha256": dataset_version,
+                "dataset_version": dataset_version,
+                "feature_service_name": feature_service_name,
+            }
+        )
+        mlflow.log_metrics(metrics)
+        code_provenance = _log_code_provenance()
+        lineage_id = _log_lineage_manifest(lineage_manifest_path, dataset_version)
+        sample = x_train.iloc[: min(3, len(x_train))]
+        expected = model.predict(x_test.iloc[: min(32, len(x_test))])
+        model_info = mlflow.sklearn.log_model(
+            sk_model=model,
+            name="model",
+            serialization_format="cloudpickle",
+            signature=infer_signature(sample, model.predict(sample)),
+        )
+        loaded = mlflow.sklearn.load_model(model_info.model_uri)
+        np.testing.assert_allclose(
+            loaded.predict(x_test.iloc[: min(32, len(x_test))]),
+            expected,
+            rtol=1e-10,
+            atol=1e-10,
+        )
+        downloaded_model = mlflow.artifacts.download_artifacts(
+            artifact_uri=model_info.model_uri
+        )
+        model_artifact_sha256 = sha256_directory(downloaded_model)
+        bundle_id = _log_release_bundle(
+            run_id=run.info.run_id,
+            model_uri=model_info.model_uri,
+            model_artifact_sha256=model_artifact_sha256,
+            dataset_sha256=dataset_version,
+            lineage_id=lineage_id,
+            code_provenance=code_provenance,
+            feature_service_name=feature_service_name,
+            training_attempt_id=training_attempt_id,
+        )
+        mlflow.set_tag("artifact_reload_verified", "true")
+        report: dict[str, object] = {
+            **evaluation_report,
+            "run_id": run.info.run_id,
+            "model_uri": model_info.model_uri,
+            "metrics": metrics,
+            "artifact_reload_verified": True,
+            "dataset_lineage_id": lineage_id,
+            "code_sha256": code_provenance["code_sha256"],
+            "model_artifact_sha256": model_artifact_sha256,
+            "release_bundle_id": bundle_id,
+        }
+        mlflow.log_dict(report, "evaluation_report.json")
+        return report
 
 
 def train_and_log_champion(
@@ -370,6 +625,8 @@ def train_and_log_champion(
     *,
     dataset_version: str,
     source_row_count: int,
+    lineage_manifest_path: str | Path | None = None,
+    training_attempt_id: str | None = None,
 ) -> dict[str, object]:
     """Fit, evaluate, log, and reload-verify the champion model."""
     model.fit(x_train, y_train)
@@ -377,14 +634,16 @@ def train_and_log_champion(
     metrics = evaluate_segments(x_test, y_test, predictions)
     LOGGER.info("Champion metrics: %s", metrics)
     with mlflow.start_run(run_name="catboost_price_ensemble_champion") as run:
-        mlflow.set_tags(
-            {
-                "champion": "true",
-                "promotion_status": "champion",
-                "model_family": "catboost_ensemble",
-                "artifact_reload_verified": "pending",
-            }
-        )
+        tags = {
+            "champion": "true",
+            "promotion_status": "champion",
+            "model_family": "catboost_ensemble",
+            "artifact_reload_verified": "pending",
+        }
+        if training_attempt_id is not None:
+            tags["mlflow.parentRunId"] = training_attempt_id
+            tags["training_attempt_id"] = training_attempt_id
+        mlflow.set_tags(tags)
         mlflow.log_params(
             {
                 "model_name": MODEL_NAME,
@@ -392,6 +651,7 @@ def train_and_log_champion(
                 "feature_service_name": FEATURE_SERVICE_NAME,
                 "number_of_features": x_train.shape[1],
                 "dataset_version": dataset_version,
+                "dataset_sha256": dataset_version,
                 "source_row_count": source_row_count,
                 "training_row_count": len(x_train),
                 "test_row_count": len(x_test),
@@ -406,6 +666,8 @@ def train_and_log_champion(
             }
         )
         mlflow.log_metrics(metrics)
+        code_provenance = _log_code_provenance()
+        lineage_id = _log_lineage_manifest(lineage_manifest_path, dataset_version)
         mlflow.log_dict(model.feature_importances(), "feature_importance.json")
         sample = x_train.iloc[:3]
         model_info = mlflow.sklearn.log_model(
@@ -418,11 +680,29 @@ def train_and_log_champion(
         np.testing.assert_allclose(
             loaded.predict(x_test.iloc[:32]), predictions[:32], rtol=1e-10, atol=1e-10
         )
+        downloaded_model = mlflow.artifacts.download_artifacts(
+            artifact_uri=model_info.model_uri
+        )
+        model_artifact_sha256 = sha256_directory(downloaded_model)
+        bundle_id = _log_release_bundle(
+            run_id=run.info.run_id,
+            model_uri=model_info.model_uri,
+            model_artifact_sha256=model_artifact_sha256,
+            dataset_sha256=dataset_version,
+            lineage_id=lineage_id,
+            code_provenance=code_provenance,
+            feature_service_name=FEATURE_SERVICE_NAME,
+            training_attempt_id=training_attempt_id,
+        )
         mlflow.set_tag("artifact_reload_verified", "true")
         report: dict[str, object] = {
             "run_id": run.info.run_id,
             "model_uri": model_info.model_uri,
             "metrics": metrics,
+            "dataset_lineage_id": lineage_id,
+            "code_sha256": code_provenance["code_sha256"],
+            "model_artifact_sha256": model_artifact_sha256,
+            "release_bundle_id": bundle_id,
         }
         mlflow.log_dict(report, "report.json")
         return report
@@ -434,27 +714,80 @@ def run_training(
     experiment_name: str = EXPERIMENT_NAME,
 ) -> dict[str, object]:
     """Run the reproducible Feast-to-MLflow champion pipeline."""
-    labels = load_labels(data_path)
-    historical, feature_names = load_features_from_feast(
-        feature_repo_path, labels.loc[:, list(ENTITY_COLUMNS)]
+    tracking_uri = os.getenv(
+        "MLFLOW_TRACKING_URI", f"sqlite:///{PROJECT_ROOT / 'mlflow.db'}"
     )
-    x, y = build_training_dataset(labels, historical, feature_names)
-    x_train, x_test, y_train, y_test = train_test_split(
-        x, y, test_size=TEST_SIZE, random_state=RANDOM_STATE
+    attempt_id = create_training_attempt(
+        tracking_uri, experiment_name, "airbnb_local_training"
     )
-    mlflow.set_tracking_uri(
-        os.getenv("MLFLOW_TRACKING_URI", f"sqlite:///{PROJECT_ROOT / 'mlflow.db'}")
-    )
-    mlflow.set_experiment(experiment_name)
-    return train_and_log_champion(
-        CatBoostPriceEnsembleRegressor(tuple(feature_names)),
-        x_train,
-        x_test,
-        y_train,
-        y_test,
-        dataset_version=get_dataset_version(data_path),
-        source_row_count=len(labels),
-    )
+    try:
+        resolved_data_path = data_path.expanduser().resolve()
+        validation_report = require_valid_dataset(resolved_data_path)
+        update_training_attempt(tracking_uri, attempt_id, "validated")
+        configured_source = Path(
+            os.getenv("AIRBNB_RAW_DATA_PATH", DEFAULT_RAW_DATA_PATH)
+        ).expanduser().resolve()
+        source_path = (
+            configured_source if configured_source.is_file() else resolved_data_path
+        )
+        source_role = "raw_input" if configured_source.is_file() else "training_input"
+        snapshot_root = Path(
+            os.getenv("AIRBNB_SNAPSHOT_ROOT", DEFAULT_SNAPSHOT_ROOT)
+        ).expanduser().resolve()
+        published = publish_dataset_snapshot(
+            resolved_data_path,
+            snapshot_root,
+            source_path=source_path,
+            validation_report=validation_report,
+            transformation_name="training.preprocessing.pipeline.run_pipeline",
+            git_commit=get_git_sha(),
+            feature_service_name=FEATURE_SERVICE_NAME,
+            source_role=source_role,
+            object_store_uri=os.getenv("AIRBNB_SNAPSHOT_S3_URI"),
+        )
+        immutable_data_path = Path(published["snapshot_path"])
+        verify_dataset_snapshot(immutable_data_path, published["dataset_sha256"])
+        if get_dataset_version(resolved_data_path) != published["dataset_sha256"]:
+            LOGGER.error("Mutable Feast source changed after snapshot publication")
+            raise ValueError(
+                "Feast source changed after the training snapshot was created"
+            )
+        labels = load_labels(immutable_data_path)
+        historical, feature_names = load_features_from_feast(
+            feature_repo_path, labels.loc[:, list(ENTITY_COLUMNS)]
+        )
+        if get_dataset_version(resolved_data_path) != published["dataset_sha256"]:
+            LOGGER.error("Mutable Feast source changed during historical retrieval")
+            raise ValueError("Feast source changed during historical feature retrieval")
+        update_training_attempt(tracking_uri, attempt_id, "features_retrieved")
+        x, y = build_training_dataset(labels, historical, feature_names)
+        x_train, x_test, y_train, y_test = train_test_split(
+            x, y, test_size=TEST_SIZE, random_state=RANDOM_STATE
+        )
+        configured_manifest = os.getenv("AIRBNB_LINEAGE_MANIFEST_PATH")
+        lineage_manifest = Path(
+            configured_manifest or published["lineage_manifest_path"]
+        ).expanduser().resolve()
+        report = train_and_log_champion(
+            CatBoostPriceEnsembleRegressor(tuple(feature_names)),
+            x_train,
+            x_test,
+            y_train,
+            y_test,
+            dataset_version=published["dataset_sha256"],
+            source_row_count=len(labels),
+            lineage_manifest_path=lineage_manifest,
+            training_attempt_id=attempt_id,
+        )
+        update_training_attempt(
+            tracking_uri, attempt_id, "model_logged", outcome="completed"
+        )
+        return {**report, "training_attempt_id": attempt_id}
+    except BaseException as exc:
+        update_training_attempt(
+            tracking_uri, attempt_id, "failed", outcome="failed", error=exc
+        )
+        raise
 
 
 def _parse_args() -> argparse.Namespace:

@@ -20,6 +20,23 @@ variable "noncurrent_version_expiration_days" {
   }
 }
 
+variable "object_lock_enabled" {
+  description = "Enable S3 Object Lock for immutable model, data, and lineage artifacts."
+  type        = bool
+  default     = false
+}
+
+variable "object_lock_retention_days" {
+  description = "Default governance retention period when Object Lock is enabled."
+  type        = number
+  default     = 90
+
+  validation {
+    condition     = var.object_lock_retention_days >= 1
+    error_message = "object_lock_retention_days must be at least one day."
+  }
+}
+
 variable "tags" {
   description = "Tags applied to the S3 bucket."
   type        = map(string)

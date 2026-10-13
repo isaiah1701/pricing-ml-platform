@@ -7,17 +7,22 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1
 WORKDIR /build
 COPY --link serving/app/requirements.txt ./requirements.txt
-RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    python -m pip wheel --prefer-binary --wheel-dir /wheels --requirement requirements.txt
+RUN python -m pip wheel --prefer-binary --wheel-dir /wheels --requirement requirements.txt
 
 FROM python:3.12-slim-bookworm
 
+ARG GIT_COMMIT=unknown
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
     HOME=/tmp \
+    OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    NUMEXPR_NUM_THREADS=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_ROOT_USER_ACTION=ignore
+    PIP_ROOT_USER_ACTION=ignore \
+    GIT_COMMIT=$GIT_COMMIT
 WORKDIR /app
 RUN groupadd --system --gid 10001 app \
     && useradd --system --no-log-init --uid 10001 --gid app --home-dir /tmp --shell /usr/sbin/nologin app

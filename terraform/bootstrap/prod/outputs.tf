@@ -19,7 +19,7 @@ output "terraform_execution_role_arn" {
 }
 
 output "environment_backend_hcl" {
-  description = "Use this value as the backend configuration when initializing terraform/environments/${var.environment}."
+  description = "Backend configuration for the matching production environment root."
   value       = <<-EOT
     bucket       = "${aws_s3_bucket.terraform_state.id}"
     key          = "${local.state_key}"
@@ -27,4 +27,14 @@ output "environment_backend_hcl" {
     encrypt      = true
     use_lockfile = true
   EOT
+}
+
+output "github_ecr_publish_role_arn" {
+  description = "Role configured in GitHub as AWS_ECR_PUBLISH_ROLE_ARN."
+  value       = try(aws_iam_role.github_ecr_publish[0].arn, null)
+}
+
+output "github_oidc_provider_arn" {
+  description = "GitHub Actions OIDC provider created for short-lived CI credentials."
+  value       = try(aws_iam_openid_connect_provider.github[0].arn, null)
 }

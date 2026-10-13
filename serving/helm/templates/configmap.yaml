@@ -9,5 +9,11 @@ data:
   MLFLOW_TRACKING_URI: {{ required "mlflow.trackingUri is required" .Values.mlflow.trackingUri | quote }}
   MODEL_NAME: {{ required "mlflow.modelName is required" .Values.mlflow.modelName | quote }}
   MODEL_ALIAS: {{ required "mlflow.modelAlias is required" .Values.mlflow.modelAlias | quote }}
+  MAX_CONCURRENT_PREDICTIONS: {{ .Values.runtime.maxConcurrentPredictions | quote }}
+  PREDICTION_QUEUE_TIMEOUT_SECONDS: {{ .Values.runtime.predictionQueueTimeoutSeconds | quote }}
+  OMP_NUM_THREADS: {{ .Values.runtime.nativeThreads | quote }}
+  OPENBLAS_NUM_THREADS: {{ .Values.runtime.nativeThreads | quote }}
+  MKL_NUM_THREADS: {{ .Values.runtime.nativeThreads | quote }}
+  NUMEXPR_NUM_THREADS: {{ .Values.runtime.nativeThreads | quote }}
   LOG_LEVEL: {{ .Values.logLevel | quote }}
 {{- end }}

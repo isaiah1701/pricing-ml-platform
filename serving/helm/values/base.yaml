@@ -9,6 +9,13 @@ image:
   tag: dev
   pullPolicy: IfNotPresent
 
+trainingImage:
+  repository: airbnb-model-training
+  tag: dev
+
+ingress:
+  enabled: false
+
 replicaCount: 1
 
 service:
@@ -26,3 +33,8 @@ mlflow:
 
 externalSecret:
   enabled: false
+
+runtime:
+  maxConcurrentPredictions: 1
+  predictionQueueTimeoutSeconds: 5
+  nativeThreads: 1

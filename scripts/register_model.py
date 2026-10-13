@@ -18,6 +18,16 @@ DEFAULT_REGISTERED_MODEL_NAME = "airbnb-price-predictor"
 MODEL_ARTIFACT_NAME = "model"
 DEFAULT_MODEL_ALIAS = "champion"
 RUN_ID_PATTERN = re.compile(r"^[0-9a-fA-F]{32}$")
+REQUIRED_PROVENANCE_TAGS: frozenset[str] = frozenset(
+    {
+        "release_bundle_id",
+        "training_attempt_id",
+        "mlflow_run_id",
+        "code_sha256",
+        "dataset_sha256",
+        "model_artifact_sha256",
+    }
+)
 
 
 def get_required_run_id() -> str:
@@ -85,9 +95,11 @@ def set_version_metadata(
     """Attach source, dataset, and evaluation metadata to a model version."""
     candidate_metadata: dict[str, object | None] = {
         "source_run_id": run.info.run_id,
+        "mlflow_run_id": run.info.run_id,
         "source_logged_model_id": logged_model.model_id,
         "source_artifact_name": logged_model.name,
         "dataset_version": run.data.params.get("dataset_version"),
+        "dataset_sha256": run.data.params.get("dataset_sha256"),
         "feature_service_name": run.data.params.get("feature_service_name"),
         "mae": run.data.metrics.get("mae"),
         "rmse": run.data.metrics.get("rmse"),
@@ -99,6 +111,10 @@ def set_version_metadata(
         ),
         "model_family": run.data.tags.get("model_family"),
         "git_sha": run.data.tags.get("mlflow.source.git.commit"),
+        "release_bundle_id": run.data.tags.get("release_bundle_id"),
+        "training_attempt_id": run.data.tags.get("training_attempt_id"),
+        "code_sha256": run.data.tags.get("code_sha256"),
+        "model_artifact_sha256": run.data.tags.get("model_artifact_sha256"),
         "registered_by": "scripts/register_model.py",
     }
     metadata = {
@@ -106,6 +122,14 @@ def set_version_metadata(
         for key, value in candidate_metadata.items()
         if value is not None and str(value).strip()
     }
+    missing_provenance = sorted(REQUIRED_PROVENANCE_TAGS.difference(metadata))
+    if missing_provenance:
+        LOGGER.error(
+            "Selected run is missing required provenance: %s", missing_provenance
+        )
+        raise ValueError(
+            f"Selected run is missing required provenance: {missing_provenance}"
+        )
     for key, value in metadata.items():
         client.set_model_version_tag(
             name=model_name,

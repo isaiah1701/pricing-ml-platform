@@ -13,8 +13,14 @@ import pandas as pd
 from airflow.sdk import DAG, dag, task
 from feast import FeatureStore
 
+from training.lineage import (
+    load_lineage_manifest,
+    publish_dataset_snapshot,
+    resolve_git_commit,
+    verify_dataset_snapshot,
+)
 from training.preprocessing.pipeline import run_pipeline
-
+from training.validation import ValidationReport, require_valid_dataset
 
 LOGGER = logging.getLogger(__name__)
 PROJECT_ROOT: Path = Path(__file__).resolve().parents[1]
@@ -40,7 +46,12 @@ FEATURE_DATA_PATH: Path = _configured_path(
 FEATURE_REPO_PATH: Path = _configured_path(
     "AIRBNB_FEATURE_REPO_PATH", PROJECT_ROOT / "feature_repo"
 )
-VERIFY_SCRIPT_PATH: Path = PROJECT_ROOT / "scripts" / "verify_feature_store.py"
+SNAPSHOT_ROOT: Path = _configured_path(
+    "AIRBNB_SNAPSHOT_ROOT", PROJECT_ROOT / "data" / "snapshots"
+)
+VERIFY_SCRIPT_PATH: Path = _configured_path(
+    "AIRBNB_VERIFY_SCRIPT_PATH", PROJECT_ROOT / "scripts" / "verify_feature_store.py"
+)
 
 
 class FeatureBuildResult(TypedDict):
@@ -53,6 +64,18 @@ class FeatureBuildResult(TypedDict):
     column_count: int
     event_timestamp_min: str
     event_timestamp_max: str
+
+
+class ValidatedFeatureBuildResult(FeatureBuildResult):
+    """Feature-build payload augmented with the blocking validation report."""
+
+    validation_report: ValidationReport
+    mutable_output_path: str
+    snapshot_id: str
+    dataset_sha256: str
+    source_sha256: str
+    lineage_id: str
+    lineage_manifest_path: str
 
 
 @task(retries=2, retry_delay=timedelta(minutes=5))
@@ -95,13 +118,43 @@ def build_feature_dataset() -> FeatureBuildResult:
     }
 
 
+@task(retries=0)
+def validate_feature_dataset(
+    feature_result: FeatureBuildResult,
+) -> ValidatedFeatureBuildResult:
+    """Validate and publish a write-once snapshot before Feast publication."""
+    LOGGER.info("Validating transformed feature artifact before Feast publication")
+    report = require_valid_dataset(feature_result["output_path"])
+    published = publish_dataset_snapshot(
+        feature_result["output_path"],
+        SNAPSHOT_ROOT,
+        source_path=RAW_DATA_PATH,
+        validation_report=report,
+        transformation_name="training.preprocessing.pipeline.run_pipeline",
+        git_commit=resolve_git_commit(PROJECT_ROOT),
+        feature_service_name="airbnb_price_model_v1",
+    )
+    immutable_report = require_valid_dataset(published["snapshot_path"])
+    return {
+        **feature_result,
+        **published,
+        "mutable_output_path": feature_result["output_path"],
+        "output_path": published["snapshot_path"],
+        "validation_report": immutable_report,
+    }
+
+
 @task(retries=1, retry_delay=timedelta(minutes=2))
-def apply_feature_repository(feature_result: FeatureBuildResult) -> FeatureBuildResult:
+def apply_feature_repository(
+    feature_result: ValidatedFeatureBuildResult,
+) -> ValidatedFeatureBuildResult:
     """Apply the Feast declarations after the feature artifact is validated."""
     feature_path = Path(feature_result["output_path"])
     if not feature_path.is_file():
         LOGGER.error("Feature artifact does not exist at %s", feature_path)
         raise FileNotFoundError(f"Feature artifact not found: {feature_path}")
+    verify_dataset_snapshot(feature_path, feature_result["dataset_sha256"])
+    load_lineage_manifest(feature_result["lineage_manifest_path"])
 
     feast_executable = shutil.which("feast")
     if feast_executable is None:
@@ -110,6 +163,7 @@ def apply_feature_repository(feature_result: FeatureBuildResult) -> FeatureBuild
 
     environment = os.environ.copy()
     environment.setdefault("REDIS_CONNECTION_STRING", DEFAULT_REDIS_CONNECTION)
+    environment["AIRBNB_FEATURE_DATA_PATH"] = str(feature_path)
     LOGGER.info("Applying Feast repository from %s", FEATURE_REPO_PATH)
     completed_process = subprocess.run(
         [feast_executable, "apply"],
@@ -128,10 +182,14 @@ def apply_feature_repository(feature_result: FeatureBuildResult) -> FeatureBuild
 
 @task(retries=2, retry_delay=timedelta(minutes=5))
 def materialize_online_features(
-    feature_result: FeatureBuildResult,
-) -> FeatureBuildResult:
+    feature_result: ValidatedFeatureBuildResult,
+) -> ValidatedFeatureBuildResult:
     """Materialize the generated snapshot into the configured Redis online store."""
     os.environ.setdefault("REDIS_CONNECTION_STRING", DEFAULT_REDIS_CONNECTION)
+    os.environ["AIRBNB_FEATURE_DATA_PATH"] = feature_result["output_path"]
+    verify_dataset_snapshot(
+        feature_result["output_path"], feature_result["dataset_sha256"]
+    )
     start_timestamp = (
         pd.Timestamp(feature_result["event_timestamp_min"]).to_pydatetime()
         - timedelta(seconds=1)
@@ -158,7 +216,7 @@ def materialize_online_features(
 
 
 @task(retries=1, retry_delay=timedelta(minutes=2))
-def verify_ready_features(feature_result: FeatureBuildResult) -> None:
+def verify_ready_features(feature_result: ValidatedFeatureBuildResult) -> None:
     """Run the existing offline-versus-online feature verification script."""
     LOGGER.info(
         "Verifying %d ready feature rows from %s",
@@ -167,6 +225,13 @@ def verify_ready_features(feature_result: FeatureBuildResult) -> None:
     )
     environment = os.environ.copy()
     environment.setdefault("REDIS_CONNECTION_STRING", DEFAULT_REDIS_CONNECTION)
+    environment["AIRBNB_FEATURE_DATA_PATH"] = feature_result["output_path"]
+    environment["AIRBNB_LINEAGE_MANIFEST_PATH"] = feature_result[
+        "lineage_manifest_path"
+    ]
+    verify_dataset_snapshot(
+        feature_result["output_path"], feature_result["dataset_sha256"]
+    )
     completed_process = subprocess.run(
         [sys.executable, str(VERIFY_SCRIPT_PATH)],
         cwd=PROJECT_ROOT,
@@ -193,7 +258,8 @@ def build_feature_pipeline() -> None:
     # Airflow replaces task return values with XComArg objects while constructing
     # the DAG, then resolves them to the annotated payloads when tasks execute.
     feature_result = build_feature_dataset()
-    applied_result = apply_feature_repository(feature_result)  # type: ignore[arg-type]
+    validated_result = validate_feature_dataset(feature_result)  # type: ignore[arg-type]
+    applied_result = apply_feature_repository(validated_result)  # type: ignore[arg-type]
     materialized_result = materialize_online_features(
         applied_result  # type: ignore[arg-type]
     )

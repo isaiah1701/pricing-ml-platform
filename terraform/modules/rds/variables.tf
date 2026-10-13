@@ -31,14 +31,28 @@ variable "username" {
 }
 
 variable "password" {
-  description = "Master password for the PostgreSQL instance. Supply this from a secure secret source."
+  description = "Master password when AWS-managed credentials are disabled."
   type        = string
+  default     = null
+  nullable    = true
   sensitive   = true
 
   validation {
-    condition     = length(var.password) >= 8 && length(var.password) <= 128 && !can(regex("[/\"@]", var.password))
+    condition     = var.password == null || (length(var.password) >= 8 && length(var.password) <= 128 && !can(regex("[/\"@]", var.password)))
     error_message = "password must be 8-128 characters and cannot contain slash, double quote, or at-sign characters."
   }
+}
+
+variable "manage_master_user_password" {
+  description = "Let RDS generate and rotate the master password in Secrets Manager."
+  type        = bool
+  default     = true
+}
+
+variable "performance_insights_enabled" {
+  description = "Enable RDS Performance Insights."
+  type        = bool
+  default     = true
 }
 
 variable "postgresql_engine_version" {

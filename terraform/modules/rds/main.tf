@@ -11,9 +11,10 @@ resource "aws_db_instance" "this" {
   engine_version = var.postgresql_engine_version
   instance_class = var.instance_class
 
-  db_name  = var.database_name
-  username = var.username
-  password = var.password
+  db_name                     = var.database_name
+  username                    = var.username
+  password                    = var.manage_master_user_password ? null : var.password
+  manage_master_user_password = var.manage_master_user_password
 
   allocated_storage     = var.allocated_storage
   max_allocated_storage = var.max_allocated_storage
@@ -24,12 +25,14 @@ resource "aws_db_instance" "this" {
   vpc_security_group_ids = var.security_group_ids
   publicly_accessible    = false
 
-  backup_retention_period   = var.backup_retention_period
-  multi_az                  = var.multi_az
-  deletion_protection       = var.deletion_protection
-  skip_final_snapshot       = var.skip_final_snapshot
-  final_snapshot_identifier = var.skip_final_snapshot ? null : var.final_snapshot_identifier
-  copy_tags_to_snapshot     = true
+  backup_retention_period         = var.backup_retention_period
+  multi_az                        = var.multi_az
+  deletion_protection             = var.deletion_protection
+  skip_final_snapshot             = var.skip_final_snapshot
+  final_snapshot_identifier       = var.skip_final_snapshot ? null : var.final_snapshot_identifier
+  copy_tags_to_snapshot           = true
+  performance_insights_enabled    = var.performance_insights_enabled
+  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
 
   tags = var.tags
 
@@ -42,6 +45,11 @@ resource "aws_db_instance" "this" {
     precondition {
       condition     = var.skip_final_snapshot || var.final_snapshot_identifier != null
       error_message = "final_snapshot_identifier must be set when skip_final_snapshot is false."
+    }
+
+    precondition {
+      condition     = var.manage_master_user_password || var.password != null
+      error_message = "password is required when manage_master_user_password is false."
     }
   }
 }

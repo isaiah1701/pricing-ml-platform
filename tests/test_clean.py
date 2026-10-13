@@ -7,7 +7,6 @@ import pytest
 
 from training.preprocessing.clean import clean_listings
 
-
 LOGGER = logging.getLogger(__name__)
 
 

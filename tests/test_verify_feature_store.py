@@ -8,7 +8,6 @@ import pandas as pd
 
 from scripts.verify_feature_store import feature_values_match, load_known_listing
 
-
 LOGGER = logging.getLogger(__name__)
 
 

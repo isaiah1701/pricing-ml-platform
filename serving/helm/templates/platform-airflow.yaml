@@ -1,0 +1,163 @@
+{{- if and .Values.platform.enabled (not .Values.bootstrap.enabled) }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.platform.airflow.serviceAccountName }}
+  namespace: {{ .Values.platform.airflow.namespace }}
+automountServiceAccountToken: true
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-data
+  namespace: {{ .Values.platform.airflow.namespace }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: {{ .Values.platform.airflow.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.platform.airflow.storageSize }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow
+  namespace: {{ .Values.platform.airflow.namespace }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airflow
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airflow
+    spec:
+      serviceAccountName: {{ .Values.platform.airflow.serviceAccountName }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      {{- if .Values.platform.airflow.dataBootstrapEnabled }}
+      initContainers:
+        - name: download-raw-data
+          image: {{ printf "%s:%s" (required "trainingImage.repository is required" .Values.trainingImage.repository) (required "trainingImage.tag is required" .Values.trainingImage.tag) | quote }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              mkdir -p /opt/airflow/input
+              mkdir -p /opt/airflow/feature_repo/data
+              cp /app/feature_repo/*.py /opt/airflow/feature_repo/
+              cp /app/feature_repo/feature_store.yaml /opt/airflow/feature_repo/
+              python -c "import boto3, os; boto3.client('s3').download_file(os.environ['PLATFORM_DATA_BUCKET'], os.environ['AIRBNB_RAW_DATA_KEY'], '/opt/airflow/input/AB_NYC_2019.csv')"
+          env:
+            - name: AWS_REGION
+              value: {{ .Values.platform.awsRegion | quote }}
+            - name: PLATFORM_DATA_BUCKET
+              value: {{ required "platform.airflow.dataBucket is required" .Values.platform.airflow.dataBucket | quote }}
+            - name: AIRBNB_RAW_DATA_KEY
+              value: {{ .Values.platform.airflow.rawDataKey | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: airflow-data
+              mountPath: /opt/airflow
+      {{- end }}
+      containers:
+        - name: airflow
+          image: {{ printf "%s:%s" (required "trainingImage.repository is required" .Values.trainingImage.repository) (required "trainingImage.tag is required" .Values.trainingImage.tag) | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["airflow", "standalone"]
+          envFrom:
+            - secretRef:
+                name: airflow-database
+          env:
+            - name: AWS_REGION
+              value: {{ .Values.platform.awsRegion | quote }}
+            - name: AIRFLOW_HOME
+              value: /opt/airflow/home
+            - name: AIRFLOW__CORE__DAGS_FOLDER
+              value: /app/pipelines
+            - name: AIRFLOW__CORE__LOAD_EXAMPLES
+              value: "false"
+            - name: AIRFLOW__CORE__EXECUTOR
+              value: LocalExecutor
+            - name: AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS
+              value: admin:admin
+            - name: AIRFLOW__API__BASE_URL
+              value: http://airflow.airflow.svc.cluster.local:8080
+            - name: MLFLOW_TRACKING_URI
+              value: http://mlflow.mlflow.svc.cluster.local:5000
+            - name: MLFLOW_DISABLE_AGENT_HINT
+              value: "1"
+            - name: PROMETHEUS_PUSHGATEWAY_URL
+              value: http://prometheus-pushgateway.monitoring.svc.cluster.local:9091
+            - name: REDIS_CONNECTION_STRING
+              value: {{ required "platform.airflow.redisConnectionString is required" .Values.platform.airflow.redisConnectionString | quote }}
+            - name: AIRBNB_RAW_DATA_PATH
+              value: /opt/airflow/input/AB_NYC_2019.csv
+            - name: AIRBNB_FEATURE_DATA_PATH
+              value: /opt/airflow/work/listing_features.parquet
+            - name: AIRBNB_FEATURE_REPO_PATH
+              value: /opt/airflow/feature_repo
+            - name: AIRBNB_VERIFY_SCRIPT_PATH
+              value: /app/scripts/verify_feature_store.py
+            - name: AIRBNB_SNAPSHOT_ROOT
+              value: /opt/airflow/data-snapshots
+            - name: AIRBNB_SNAPSHOT_S3_URI
+              value: {{ printf "s3://%s/snapshots" (required "platform.airflow.dataBucket is required" .Values.platform.airflow.dataBucket) | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 90
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.platform.airflow.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: airflow-data
+              mountPath: /opt/airflow
+      nodeSelector:
+        workload: training
+      tolerations:
+        - key: workload
+          operator: Equal
+          value: training
+          effect: NoSchedule
+      volumes:
+        - name: airflow-data
+          persistentVolumeClaim:
+            claimName: airflow-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow
+  namespace: {{ .Values.platform.airflow.namespace }}
+spec:
+  selector:
+    app.kubernetes.io/name: airflow
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+{{- end }}

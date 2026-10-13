@@ -9,6 +9,35 @@ image:
   tag: dev
   pullPolicy: IfNotPresent
 
+trainingImage:
+  repository: airbnb-model-training
+  tag: dev
+
+rollout:
+  initialWeight: 5
+  pauseDuration: 2m
+  analysisInterval: 1m
+  analysisCount: 3
+  errorRateThreshold: 0.05
+  p95LatencyThresholdSeconds: 0.25
+
+prometheus:
+  address: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+
+ingress:
+  enabled: false
+  className: alb
+  scheme: internet-facing
+  certificateArn: ""
+  host: ""
+
+monitoring:
+  serviceMonitor:
+    enabled: false
+    prometheusRelease: kube-prometheus-stack
+    interval: 15s
+    scrapeTimeout: 10s
+
 replicaCount: 1
 
 service:
@@ -37,6 +66,11 @@ mlflow:
 
 logLevel: INFO
 existingSecret: ""
+
+runtime:
+  maxConcurrentPredictions: 1
+  predictionQueueTimeoutSeconds: 5
+  nativeThreads: 1
 
 serviceAccount:
   create: true
@@ -85,7 +119,7 @@ destination:
   namespace: airbnb-inference
 
 syncPolicy:
-  automated: true
+  automated: false
   prune: true
   selfHeal: true
 
@@ -96,3 +130,47 @@ externalSecretsOperator:
   chart: external-secrets
   chartVersion: 0.20.4
   serviceAccountName: external-secrets
+
+argoRollouts:
+  name: argo-rollouts
+  namespace: argo-rollouts
+  chartRepo: https://argoproj.github.io/argo-helm
+  chart: argo-rollouts
+  chartVersion: 2.43.2
+
+addons: {}
+
+platform:
+  enabled: false
+  awsRegion: eu-west-2
+  secretStoreName: platform-aws-secrets-manager
+  mlflow:
+    namespace: mlflow
+    serviceAccountName: mlflow
+    replicas: 2
+    databaseSecretArn: ""
+    artifactRoot: ""
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+  airflow:
+    namespace: airflow
+    serviceAccountName: airflow
+    databaseSecretArn: ""
+    dataBucket: ""
+    rawDataKey: data/AB_NYC_2019.csv
+    redisConnectionString: ""
+    storageClassName: gp3
+    storageSize: 100Gi
+    dataBootstrapEnabled: true
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "3"
+        memory: 6Gi

@@ -43,6 +43,17 @@ variable "github_repository" {
   }
 }
 
+variable "github_environment" {
+  description = "Protected GitHub Environment allowed to publish production images."
+  type        = string
+  default     = "production"
+
+  validation {
+    condition     = length(trimspace(var.github_environment)) > 0
+    error_message = "github_environment must not be empty."
+  }
+}
+
 variable "tags" {
   description = "Additional tags applied to bootstrap resources."
   type        = map(string)

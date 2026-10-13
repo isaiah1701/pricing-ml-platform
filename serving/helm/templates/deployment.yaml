@@ -1,6 +1,6 @@
 {{- if and .Values.workload.enabled (not .Values.bootstrap.enabled) }}
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
   name: {{ include "airbnb.fullname" . }}
   labels:
@@ -10,10 +10,42 @@ spec:
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+    canary:
+      stableService: {{ include "airbnb.fullname" . }}
+      canaryService: {{ include "airbnb.fullname" . }}-canary
+      trafficRouting:
+        alb:
+          ingress: {{ include "airbnb.fullname" . }}
+          servicePort: {{ .Values.service.port }}
+      steps:
+        - setWeight: {{ .Values.rollout.initialWeight }}
+        - pause:
+            duration: {{ .Values.rollout.pauseDuration }}
+        - analysis:
+            templates:
+              - templateName: {{ include "airbnb.fullname" . }}-canary
+            args:
+              - name: canary-service
+                value: {{ include "airbnb.fullname" . }}-canary
+        - setWeight: 25
+        - pause:
+            duration: 5m
+        - analysis:
+            templates:
+              - templateName: {{ include "airbnb.fullname" . }}-canary
+            args:
+              - name: canary-service
+                value: {{ include "airbnb.fullname" . }}-canary
+        - setWeight: 50
+        - pause:
+            duration: 5m
+        - analysis:
+            templates:
+              - templateName: {{ include "airbnb.fullname" . }}-canary
+            args:
+              - name: canary-service
+                value: {{ include "airbnb.fullname" . }}-canary
+        - setWeight: 100
   selector:
     matchLabels:
       {{- include "airbnb.selectorLabels" . | nindent 6 }}

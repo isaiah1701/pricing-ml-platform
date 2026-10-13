@@ -1,8 +1,8 @@
-# Generated from requirements.in with:
-# uv pip compile --python-version 3.12 --universal --no-annotate --no-header
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
+boto3==1.43.112
+botocore==1.43.112
 cachetools==7.1.8
 catboost==1.2.10
 certifi==2026.7.22
@@ -23,6 +23,7 @@ graphviz==0.21
 h11==0.16.0
 idna==3.19
 importlib-metadata==9.0.1
+jmespath==1.1.0
 joblib==1.6.0
 kiwisolver==1.5.1
 matplotlib==3.11.2
@@ -37,6 +38,7 @@ packaging==26.3
 pandas==2.3.3
 pillow==12.3.0
 plotly==7.0.0
+prometheus-client==0.23.1
 protobuf==6.33.6
 pyasn1==0.6.4
 pyasn1-modules==0.4.2
@@ -50,6 +52,7 @@ python-dotenv==1.2.3
 pytz==2026.3.post1
 pyyaml==6.0.3
 requests==2.34.2
+s3transfer==0.19.2
 scikit-learn==1.9.1
 scipy==1.18.1
 six==1.17.0

@@ -1,7 +1,12 @@
 # Kubernetes and GitOps deployment definitions
 
-No cloud resources are deployed by these instructions. The checked-in files
-define and validate the future production path.
+The complete, production-only execution order is documented in
+`docs/AWS_PRODUCTION_LAUNCH.md`. Terraform and Helm remain reviewable until the
+operator explicitly runs `apply` and installs the Argo CD root Application.
+
+Pushing this repository runs validation only. AWS publishing requires a manual
+workflow dispatch and `AWS_PUBLISH_ENABLED=true`; automatic Argo CD sync is
+disabled on the root and child Applications until deliberately enabled.
 
 ## Delivery and runtime flows
 
@@ -78,14 +83,17 @@ match this repository's reusable-module convention. Production currently
 creates the secret container without a value, keeping plaintext and secret
 material out of Git and normal Terraform plans/state.
 
-The production environment also defines:
+The production environment defines:
 
 - an ESO role limited to `DescribeSecret` and `GetSecretValue` on exactly the
   inference secret;
 - an EKS Pod Identity association for the `external-secrets` controller;
-- an optional inference role, disabled by default, limited to `ListBucket` and
-  `GetObject` for one configured MLflow S3 artifact prefix;
-- an optional Pod Identity association for the inference service account.
+- an inference role limited to `ListBucket`, `GetObject`, and `GetObjectVersion`
+  for the MLflow artifact prefix;
+- workload identities for MLflow, Airflow, ExternalDNS, Cluster Autoscaler, and
+  AWS Load Balancer Controller;
+- Multi-AZ PostgreSQL and Redis, plus an Object-Locked S3 artifact bucket; and
+- GitOps-managed MLflow, Airflow, Prometheus, Grafana, and Pushgateway workloads.
 
 Static validation only:
 

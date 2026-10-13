@@ -1,3 +1,21 @@
+data "aws_caller_identity" "current" {}
+
+data "aws_partition" "current" {}
+
+check "route53_configuration" {
+  assert {
+    condition     = var.create_route53_hosted_zone != (var.route53_hosted_zone_id != null)
+    error_message = "Create a hosted zone or supply an existing hosted-zone ID, but not both."
+  }
+}
+
+check "application_hostname" {
+  assert {
+    condition     = var.application_hostname == var.domain_name || endswith(var.application_hostname, ".${var.domain_name}")
+    error_message = "application_hostname must belong to domain_name."
+  }
+}
+
 locals {
   environment = "prod"
   name        = "${var.project_name}-${local.environment}"
@@ -27,6 +45,37 @@ locals {
     },
     var.access_entries
   )
+
+  pod_identities = {
+    airflow = {
+      namespace       = var.airflow_namespace
+      service_account = var.airflow_service_account
+    }
+    aws_load_balancer_controller = {
+      namespace       = "kube-system"
+      service_account = var.aws_load_balancer_controller_service_account
+    }
+    cluster_autoscaler = {
+      namespace       = "kube-system"
+      service_account = var.cluster_autoscaler_service_account
+    }
+    external_dns = {
+      namespace       = "kube-system"
+      service_account = var.external_dns_service_account
+    }
+    external_secrets = {
+      namespace       = var.external_secrets_namespace
+      service_account = var.external_secrets_service_account
+    }
+    inference = {
+      namespace       = var.inference_namespace
+      service_account = var.inference_service_account
+    }
+    mlflow = {
+      namespace       = var.mlflow_namespace
+      service_account = var.mlflow_service_account
+    }
+  }
 }
 
 module "vpc" {
@@ -46,6 +95,8 @@ module "vpc" {
 module "route53" {
   source = "../../modules/route-53"
 
+  create_hosted_zone                    = var.create_route53_hosted_zone
+  hosted_zone_name                      = var.domain_name
   hosted_zone_id                        = var.route53_hosted_zone_id
   create_certificate                    = true
   certificate_domain_name               = var.domain_name
@@ -81,16 +132,91 @@ module "eks" {
   tags                                 = local.common_tags
 }
 
-module "inference_runtime_secret" {
-  source = "../../modules/secrets-manager"
+module "platform_data" {
+  source = "../../modules/s3"
 
-  name                    = var.inference_runtime_secret_name
-  description             = "Runtime configuration consumed by the Airbnb inference service"
-  recovery_window_in_days = 30
-  tags                    = local.common_tags
+  bucket_name                        = "${local.name}-${data.aws_caller_identity.current.account_id}-data"
+  noncurrent_version_expiration_days = null
+  object_lock_enabled                = true
+  object_lock_retention_days         = var.artifact_retention_days
+  tags                               = local.common_tags
 }
 
-data "aws_iam_policy_document" "external_secrets_assume_role" {
+resource "aws_security_group" "postgresql" {
+  name        = "${local.name}-postgresql"
+  description = "PostgreSQL access from EKS workloads"
+  vpc_id      = module.vpc.vpc_id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name}-postgresql"
+  })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "postgresql_from_eks" {
+  security_group_id            = aws_security_group.postgresql.id
+  description                  = "PostgreSQL from EKS managed nodes"
+  ip_protocol                  = "tcp"
+  from_port                    = 5432
+  to_port                      = 5432
+  referenced_security_group_id = module.eks.node_security_group_id
+  tags                         = local.common_tags
+}
+
+module "mlflow_database" {
+  source = "../../modules/rds"
+
+  database_identifier         = "${local.name}-mlflow"
+  database_name               = "mlflow"
+  username                    = "mlflow_admin"
+  manage_master_user_password = true
+  instance_class              = var.database_instance_class
+  allocated_storage           = 20
+  max_allocated_storage       = 100
+  subnet_ids                  = module.vpc.private_subnet_ids
+  security_group_ids          = [aws_security_group.postgresql.id]
+  backup_retention_period     = var.database_backup_retention_days
+  multi_az                    = true
+  deletion_protection         = true
+  skip_final_snapshot         = false
+  final_snapshot_identifier   = "${local.name}-mlflow-final"
+  tags                        = local.common_tags
+}
+
+module "airflow_database" {
+  source = "../../modules/rds"
+
+  database_identifier         = "${local.name}-airflow"
+  database_name               = "airflow"
+  username                    = "airflow_admin"
+  manage_master_user_password = true
+  instance_class              = var.database_instance_class
+  allocated_storage           = 20
+  max_allocated_storage       = 100
+  subnet_ids                  = module.vpc.private_subnet_ids
+  security_group_ids          = [aws_security_group.postgresql.id]
+  backup_retention_period     = var.database_backup_retention_days
+  multi_az                    = true
+  deletion_protection         = true
+  skip_final_snapshot         = false
+  final_snapshot_identifier   = "${local.name}-airflow-final"
+  tags                        = local.common_tags
+}
+
+module "redis" {
+  source = "../../modules/redis"
+
+  replication_group_id       = "${local.name}-features"
+  vpc_id                     = module.vpc.vpc_id
+  subnet_ids                 = module.vpc.private_subnet_ids
+  allowed_security_group_ids = [module.eks.node_security_group_id]
+  node_type                  = var.redis_node_type
+  transit_encryption_enabled = true
+  tags                       = local.common_tags
+}
+
+data "aws_iam_policy_document" "pod_identity_assume_role" {
+  for_each = local.pod_identities
+
   statement {
     effect  = "Allow"
     actions = ["sts:AssumeRole", "sts:TagSession"]
@@ -103,89 +229,60 @@ data "aws_iam_policy_document" "external_secrets_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "aws:RequestTag/kubernetes-namespace"
-      values   = [var.external_secrets_namespace]
+      values   = [each.value.namespace]
     }
 
     condition {
       test     = "StringEquals"
       variable = "aws:RequestTag/kubernetes-service-account"
-      values   = [var.external_secrets_service_account]
+      values   = [each.value.service_account]
     }
   }
 }
 
-resource "aws_iam_role" "external_secrets" {
-  name               = "${local.name}-external-secrets"
-  description        = "Read only the inference runtime secret through EKS Pod Identity"
-  assume_role_policy = data.aws_iam_policy_document.external_secrets_assume_role.json
+resource "aws_iam_role" "pod_identity" {
+  for_each = local.pod_identities
+
+  name               = "${local.name}-${replace(each.key, "_", "-")}"
+  description        = "EKS Pod Identity role for ${each.value.namespace}/${each.value.service_account}"
+  assume_role_policy = data.aws_iam_policy_document.pod_identity_assume_role[each.key].json
   tags               = local.common_tags
+}
+
+resource "aws_eks_pod_identity_association" "workloads" {
+  for_each = local.pod_identities
+
+  cluster_name    = module.eks.cluster_name
+  namespace       = each.value.namespace
+  service_account = each.value.service_account
+  role_arn        = aws_iam_role.pod_identity[each.key].arn
 }
 
 data "aws_iam_policy_document" "external_secrets" {
   statement {
-    sid       = "ReadInferenceRuntimeSecret"
-    effect    = "Allow"
-    actions   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
-    resources = [module.inference_runtime_secret.arn]
+    sid     = "ReadPlatformDatabaseCredentials"
+    effect  = "Allow"
+    actions = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
+    resources = [
+      module.mlflow_database.master_user_secret_arn,
+      module.airflow_database.master_user_secret_arn,
+    ]
   }
 }
 
 resource "aws_iam_role_policy" "external_secrets" {
-  name   = "read-inference-runtime-secret"
-  role   = aws_iam_role.external_secrets.id
+  name   = "read-platform-database-credentials"
+  role   = aws_iam_role.pod_identity["external_secrets"].id
   policy = data.aws_iam_policy_document.external_secrets.json
 }
 
-resource "aws_eks_pod_identity_association" "external_secrets" {
-  cluster_name    = module.eks.cluster_name
-  namespace       = var.external_secrets_namespace
-  service_account = var.external_secrets_service_account
-  role_arn        = aws_iam_role.external_secrets.arn
-}
-
-data "aws_iam_policy_document" "inference_assume_role" {
-  count = var.mlflow_artifact_bucket_arn == null ? 0 : 1
-
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRole", "sts:TagSession"]
-
-    principals {
-      type        = "Service"
-      identifiers = ["pods.eks.amazonaws.com"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestTag/kubernetes-namespace"
-      values   = [var.inference_namespace]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestTag/kubernetes-service-account"
-      values   = [var.inference_service_account]
-    }
-  }
-}
-
-resource "aws_iam_role" "inference" {
-  count = var.mlflow_artifact_bucket_arn == null ? 0 : 1
-
-  name               = "${local.name}-inference"
-  description        = "Read only the configured MLflow artifact prefix"
-  assume_role_policy = data.aws_iam_policy_document.inference_assume_role[0].json
-  tags               = local.common_tags
-}
-
 data "aws_iam_policy_document" "inference_artifacts" {
-  count = var.mlflow_artifact_bucket_arn == null ? 0 : 1
-
   statement {
-    sid       = "ListArtifactPrefix"
+    sid       = "ListMlflowArtifacts"
     effect    = "Allow"
     actions   = ["s3:ListBucket"]
-    resources = [var.mlflow_artifact_bucket_arn]
+    resources = [module.platform_data.bucket_arn]
+
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
@@ -194,26 +291,148 @@ data "aws_iam_policy_document" "inference_artifacts" {
   }
 
   statement {
-    sid       = "ReadArtifacts"
+    sid       = "ReadMlflowArtifacts"
     effect    = "Allow"
-    actions   = ["s3:GetObject"]
-    resources = ["${var.mlflow_artifact_bucket_arn}/${trimsuffix(var.mlflow_artifact_prefix, "/")}/*"]
+    actions   = ["s3:GetObject", "s3:GetObjectVersion"]
+    resources = ["${module.platform_data.bucket_arn}/${trimsuffix(var.mlflow_artifact_prefix, "/")}/*"]
   }
 }
 
 resource "aws_iam_role_policy" "inference_artifacts" {
-  count = var.mlflow_artifact_bucket_arn == null ? 0 : 1
-
   name   = "read-mlflow-artifacts"
-  role   = aws_iam_role.inference[0].id
-  policy = data.aws_iam_policy_document.inference_artifacts[0].json
+  role   = aws_iam_role.pod_identity["inference"].id
+  policy = data.aws_iam_policy_document.inference_artifacts.json
 }
 
-resource "aws_eks_pod_identity_association" "inference" {
-  count = var.mlflow_artifact_bucket_arn == null ? 0 : 1
+data "aws_iam_policy_document" "mlflow_artifacts" {
+  statement {
+    sid       = "ListArtifactBucket"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket", "s3:GetBucketLocation"]
+    resources = [module.platform_data.bucket_arn]
+  }
 
-  cluster_name    = module.eks.cluster_name
-  namespace       = var.inference_namespace
-  service_account = var.inference_service_account
-  role_arn        = aws_iam_role.inference[0].arn
+  statement {
+    sid    = "ManageMlflowArtifacts"
+    effect = "Allow"
+    actions = [
+      "s3:AbortMultipartUpload",
+      "s3:DeleteObject",
+      "s3:GetObject",
+      "s3:GetObjectVersion",
+      "s3:ListMultipartUploadParts",
+      "s3:PutObject",
+    ]
+    resources = ["${module.platform_data.bucket_arn}/${trimsuffix(var.mlflow_artifact_prefix, "/")}/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "mlflow_artifacts" {
+  name   = "manage-mlflow-artifacts"
+  role   = aws_iam_role.pod_identity["mlflow"].id
+  policy = data.aws_iam_policy_document.mlflow_artifacts.json
+}
+
+data "aws_iam_policy_document" "airflow_data" {
+  statement {
+    sid       = "ListPlatformData"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket", "s3:GetBucketLocation"]
+    resources = [module.platform_data.bucket_arn]
+  }
+
+  statement {
+    sid    = "ManageTrainingData"
+    effect = "Allow"
+    actions = [
+      "s3:AbortMultipartUpload",
+      "s3:GetObject",
+      "s3:GetObjectVersion",
+      "s3:ListMultipartUploadParts",
+      "s3:PutObject",
+    ]
+    resources = [
+      "${module.platform_data.bucket_arn}/data/*",
+      "${module.platform_data.bucket_arn}/monitoring/*",
+      "${module.platform_data.bucket_arn}/snapshots/*",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "airflow_data" {
+  name   = "manage-training-data"
+  role   = aws_iam_role.pod_identity["airflow"].id
+  policy = data.aws_iam_policy_document.airflow_data.json
+}
+
+resource "aws_iam_role_policy_attachment" "load_balancer_controller" {
+  role       = aws_iam_role.pod_identity["aws_load_balancer_controller"].name
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEKSLoadBalancingPolicy"
+}
+
+data "aws_iam_policy_document" "cluster_autoscaler" {
+  statement {
+    sid    = "ScaleTaggedNodeGroups"
+    effect = "Allow"
+    actions = [
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:TerminateInstanceInAutoScalingGroup",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/k8s.io/cluster-autoscaler/${module.eks.cluster_name}"
+      values   = ["owned"]
+    }
+  }
+
+  statement {
+    sid    = "DiscoverNodeGroups"
+    effect = "Allow"
+    actions = [
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeAutoScalingInstances",
+      "autoscaling:DescribeLaunchConfigurations",
+      "autoscaling:DescribeScalingActivities",
+      "autoscaling:DescribeTags",
+      "ec2:DescribeImages",
+      "ec2:DescribeInstanceTypes",
+      "ec2:DescribeLaunchTemplateVersions",
+      "ec2:GetInstanceTypesFromInstanceRequirements",
+      "eks:DescribeNodegroup",
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "cluster_autoscaler" {
+  name   = "scale-production-node-groups"
+  role   = aws_iam_role.pod_identity["cluster_autoscaler"].id
+  policy = data.aws_iam_policy_document.cluster_autoscaler.json
+}
+
+data "aws_iam_policy_document" "external_dns" {
+  statement {
+    sid       = "ChangeProductionDns"
+    effect    = "Allow"
+    actions   = ["route53:ChangeResourceRecordSets"]
+    resources = ["arn:${data.aws_partition.current.partition}:route53:::hostedzone/${module.route53.hosted_zone_id}"]
+  }
+
+  statement {
+    sid    = "DiscoverHostedZones"
+    effect = "Allow"
+    actions = [
+      "route53:ListHostedZones",
+      "route53:ListResourceRecordSets",
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "external_dns" {
+  name   = "manage-production-dns"
+  role   = aws_iam_role.pod_identity["external_dns"].id
+  policy = data.aws_iam_policy_document.external_dns.json
 }

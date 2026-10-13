@@ -7,7 +7,6 @@ from types import ModuleType
 
 import pytest
 
-
 LOGGER = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DAG_PATH = PROJECT_ROOT / "pipelines" / "feature-build.py"
@@ -34,6 +33,7 @@ def test_feature_build_dag_contains_ordered_tasks() -> None:
 
     expected_task_ids = {
         "build_feature_dataset",
+        "validate_feature_dataset",
         "apply_feature_repository",
         "materialize_online_features",
         "verify_ready_features",
@@ -41,8 +41,11 @@ def test_feature_build_dag_contains_ordered_tasks() -> None:
     assert feature_build_dag.dag_id == "airbnb_feature_build"
     assert set(feature_build_dag.task_ids) == expected_task_ids
     assert feature_build_dag.task_dict[
-        "apply_feature_repository"
+        "validate_feature_dataset"
     ].upstream_task_ids == {"build_feature_dataset"}
+    assert feature_build_dag.task_dict[
+        "apply_feature_repository"
+    ].upstream_task_ids == {"validate_feature_dataset"}
     assert feature_build_dag.task_dict[
         "materialize_online_features"
     ].upstream_task_ids == {"apply_feature_repository"}

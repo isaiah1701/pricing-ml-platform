@@ -10,6 +10,11 @@ data "aws_caller_identity" "current" {}
 
 data "aws_partition" "current" {}
 
+data "tls_certificate" "github" {
+  count = var.github_repository == null ? 0 : 1
+  url   = "https://token.actions.githubusercontent.com"
+}
+
 locals {
   name_prefix       = "${var.project_name}-${var.environment}"
   state_bucket_name = lower("${local.name_prefix}-terraform-state-${data.aws_caller_identity.current.account_id}")

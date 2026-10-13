@@ -80,6 +80,7 @@ Start the API:
 export MLFLOW_TRACKING_URI=http://localhost:5000
 export MODEL_NAME=airbnb-price-predictor
 export MODEL_ALIAS=champion
+export MODEL_REFRESH_INTERVAL_SECONDS=60
 uv run uvicorn serving.app.api:app --host 0.0.0.0 --port 8000
 ```
 
@@ -88,6 +89,7 @@ Probe and predict:
 ```sh
 curl --fail http://localhost:8000/health
 curl --fail http://localhost:8000/ready
+curl --fail http://localhost:8000/metrics
 curl --fail-with-body -X POST http://localhost:8000/predict \
   -H 'Content-Type: application/json' \
   -d '{
@@ -154,4 +156,48 @@ docker run --rm --name airbnb-api -p 8000:8000 \
 
 The process starts even when registry loading fails so `/health` remains a true
 liveness probe; `/ready` and `/predict` return sanitized HTTP 503 responses.
-The model is loaded once in the application lifespan, never per request.
+At startup the loader resolves the alias to a concrete MLflow model version.
+`/ready` and successful prediction responses report that version. Prediction
+responses also contain an opaque `prediction_id` and UTC `prediction_timestamp`
+so a downstream, access-controlled pipeline can join delayed actual outcomes
+without placing request features in Prometheus labels. Every
+`MODEL_REFRESH_INTERVAL_SECONDS` (60 seconds by default), the process checks the
+alias. A changed version is completely loaded before a single state reference is
+atomically swapped; failed checks or loads leave the current model serving.
+Set the interval to `0` to disable refresh.
+
+## Prometheus observability
+
+`GET /metrics` exposes an application-local Prometheus registry with:
+
+- `airbnb_http_requests_total` by bounded endpoint, method, and status;
+- `airbnb_prediction_latency_seconds`;
+- `airbnb_prediction_failures_total`;
+- `airbnb_readiness`;
+- `airbnb_loaded_model_info{model,alias,version}`; and
+- `airbnb_predicted_price_dollars`.
+
+No listing features or other request data are used as metric labels.
+
+## Reproducible load test
+
+The checked-in benchmark exercises request validation, FastAPI middleware,
+in-memory prediction, response serialization, and Prometheus updates without
+requiring MLflow or network I/O:
+
+```sh
+uv run python -m scripts.load_test_serving \
+  --requests 2000 \
+  --warmup-requests 100
+```
+
+Measured on 2026-09-29 under WSL2/Linux 5.15 with Python 3.14.0 and an Intel
+Core i7-1355U, using one sequential in-process ASGI client:
+
+| Requests/sec | p50 | p95 | p99 |
+|---:|---:|---:|---:|
+| 409.81 | 2.06 ms | 4.74 ms | 6.42 ms |
+
+This is a repeatable serving-stack regression baseline, not a network capacity
+claim. Production throughput should additionally be tested over HTTP with the
+deployed CatBoost artifact and intended worker count.

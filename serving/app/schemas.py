@@ -77,11 +77,15 @@ class ReadinessResponse(BaseModel):
     status: Literal["ready"] = "ready"
     model: str
     alias: str
+    version: str
 
 
 class PredictionResponse(BaseModel):
     """Return a validated nightly-price prediction and model identity."""
 
+    prediction_id: str = Field(min_length=1)
+    prediction_timestamp: str = Field(min_length=1)
     predicted_price: float = Field(ge=0.0)
     model_name: str
     model_alias: str
+    model_version: str

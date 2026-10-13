@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pandas as pd
 
-
 LOGGER = logging.getLogger(__name__)
 DEFAULT_DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "AB_NYC_2019.csv"
 

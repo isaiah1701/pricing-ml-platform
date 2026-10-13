@@ -1,0 +1,98 @@
+"""Rendered-manifest tests for automatic Argo Rollouts canary delivery."""
+
+from __future__ import annotations
+
+import logging
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Any
+
+import pytest
+import yaml
+
+LOGGER = logging.getLogger(__name__)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CHART_PATH = PROJECT_ROOT / "serving" / "helm"
+
+
+@pytest.fixture(scope="module")
+def rendered_resources() -> list[dict[str, Any]]:
+    """Render production resources through Helm for semantic assertions."""
+    helm = shutil.which("helm")
+    if helm is None:
+        pytest.skip("helm is not installed")
+    completed = subprocess.run(
+        [
+            helm,
+            "template",
+            "airbnb-inference",
+            str(CHART_PATH),
+            "--namespace",
+            "airbnb-inference",
+            "-f",
+            str(CHART_PATH / "values" / "base.yaml"),
+            "-f",
+            str(CHART_PATH / "values" / "production.yaml"),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return [resource for resource in yaml.safe_load_all(completed.stdout) if resource]
+
+
+def _resource(
+    resources: list[dict[str, Any]], kind: str, name: str
+) -> dict[str, Any]:
+    """Return one rendered resource by Kubernetes kind and name."""
+    for resource in resources:
+        if resource.get("kind") == kind and resource["metadata"]["name"] == name:
+            return resource
+    raise AssertionError(f"Missing {kind} {name}")
+
+
+def test_rollout_starts_small_and_passing_canary_reaches_full_traffic(
+    rendered_resources: list[dict[str, Any]],
+) -> None:
+    """Begin at five percent and include a final automatic 100-percent step."""
+    rollout = _resource(rendered_resources, "Rollout", "airbnb-inference")
+    canary = rollout["spec"]["strategy"]["canary"]
+    weights = [step["setWeight"] for step in canary["steps"] if "setWeight" in step]
+    assert weights == [5, 25, 50, 100]
+    assert canary["stableService"] == "airbnb-inference"
+    assert canary["canaryService"] == "airbnb-inference-canary"
+    assert canary["trafficRouting"]["alb"]["ingress"] == "airbnb-inference"
+
+
+def test_failed_analysis_aborts_without_retargeting_stable_service(
+    rendered_resources: list[dict[str, Any]],
+) -> None:
+    """Fail analysis promptly while Rollouts independently owns stable selectors."""
+    analysis = _resource(
+        rendered_resources, "AnalysisTemplate", "airbnb-inference-canary"
+    )
+    assert {metric["name"] for metric in analysis["spec"]["metrics"]} == {
+        "prediction-error-rate",
+        "prediction-p95-latency",
+    }
+    assert all(metric["failureLimit"] == 1 for metric in analysis["spec"]["metrics"])
+    assert all("result[0] <=" in metric["successCondition"] for metric in analysis["spec"]["metrics"])
+    stable = _resource(rendered_resources, "Service", "airbnb-inference")
+    canary = _resource(rendered_resources, "Service", "airbnb-inference-canary")
+    assert stable["spec"]["selector"] == canary["spec"]["selector"]
+    assert stable["metadata"]["name"] != canary["metadata"]["name"]
+
+
+def test_hpa_targets_rollout_not_removed_deployment(
+    rendered_resources: list[dict[str, Any]],
+) -> None:
+    """Keep autoscaling attached to the progressive-delivery workload."""
+    hpa = _resource(
+        rendered_resources, "HorizontalPodAutoscaler", "airbnb-inference"
+    )
+    assert hpa["spec"]["scaleTargetRef"] == {
+        "apiVersion": "argoproj.io/v1alpha1",
+        "kind": "Rollout",
+        "name": "airbnb-inference",
+    }

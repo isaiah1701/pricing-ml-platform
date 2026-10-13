@@ -5,7 +5,6 @@ from pathlib import Path
 
 from feast import FileSource
 
-
 FEATURE_DATA_PATH: Path = Path(
     os.getenv(
         "AIRBNB_FEATURE_DATA_PATH",

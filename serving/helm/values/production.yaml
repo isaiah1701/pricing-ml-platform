@@ -4,6 +4,21 @@ image:
   tag: "sha-REPLACE_WITH_GIT_SHA"
   pullPolicy: IfNotPresent
 
+trainingImage:
+  repository: "REPLACE_WITH_TRAINING_ECR_REPOSITORY"
+  tag: "sha-REPLACE_WITH_GIT_SHA"
+
+ingress:
+  enabled: true
+  className: alb
+  scheme: internet-facing
+  certificateArn: ""
+  host: "prices.5hort.site"
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+
 replicaCount: 2
 
 autoscaling:
@@ -22,15 +37,17 @@ tolerations:
     effect: NoSchedule
 
 externalSecret:
-  enabled: true
-  name: airbnb-inference-runtime
-  refreshInterval: 1h
-  secretStoreName: airbnb-aws-secrets-manager
-  aws:
-    region: eu-west-2
-    secretId: prod-mlops/prod/inference
-  properties:
-    - MLFLOW_TRACKING_USERNAME
-    - MLFLOW_TRACKING_PASSWORD
+  enabled: false
 
-existingSecret: airbnb-inference-runtime
+existingSecret: ""
+
+platform:
+  enabled: false
+  awsRegion: eu-west-2
+  mlflow:
+    databaseSecretArn: "REPLACE_WITH_MLFLOW_DATABASE_SECRET_ARN"
+    artifactRoot: "s3://REPLACE_WITH_PLATFORM_DATA_BUCKET/mlflow"
+  airflow:
+    databaseSecretArn: "REPLACE_WITH_AIRFLOW_DATABASE_SECRET_ARN"
+    dataBucket: "REPLACE_WITH_PLATFORM_DATA_BUCKET"
+    redisConnectionString: "rediss://REPLACE_WITH_REDIS_CONFIGURATION_ENDPOINT:6379"

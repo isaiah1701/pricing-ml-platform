@@ -3,23 +3,31 @@ name: Validate model serving
 on:
   pull_request:
     paths:
+      - .github/**
+      - monitoring/**
+      - pipelines/**
+      - retraining/**
       - serving/**
-      - scripts/register_model.py
+      - training/**
+      - scripts/**
       - tests/**
       - terraform/**
       - pyproject.toml
       - uv.lock
-      - .github/workflows/validate.yml
   push:
     branches: [main]
     paths:
+      - .github/**
+      - monitoring/**
+      - pipelines/**
+      - retraining/**
       - serving/**
-      - scripts/register_model.py
+      - training/**
+      - scripts/**
       - tests/**
       - terraform/**
       - pyproject.toml
       - uv.lock
-      - .github/workflows/validate.yml
   workflow_dispatch:
 
 permissions:
@@ -36,16 +44,12 @@ jobs:
       - name: Install locked dependencies
         run: |
           python -m pip install uv==0.11.28
-          uv sync --frozen --extra test
-      - name: Run tests and lint
+          uv sync --frozen --extra test --extra orchestration
+      - name: Lint all Python
         run: |
-          uv run pytest
-          uvx --from ruff==0.16.7 ruff check \
-            serving \
-            scripts/register_model.py \
-            tests/test_model_loader.py \
-            tests/test_registry.py \
-            tests/test_serving.py
+          uvx --from ruff==0.16.7 ruff check .
+      - name: Run all tests
+        run: uv run pytest
 
   image:
     runs-on: ubuntu-24.04
@@ -67,11 +71,21 @@ jobs:
       - uses: azure/setup-helm@bf6a7d304bc2fdb57e0331155b7ebf2c504acf0a # v4
       - name: Lint and render workload
         run: |
+          helm lint serving/helm
           helm lint serving/helm -f serving/helm/values/base.yaml
+          helm lint serving/helm \
+            -f serving/helm/values/base.yaml \
+            -f serving/helm/values/production.yaml
           helm template airbnb-inference serving/helm \
             --namespace airbnb-inference \
             -f serving/helm/values/base.yaml \
             -f serving/helm/values/production.yaml > rendered-workload.yaml
+          helm template airbnb-platform serving/helm \
+            --namespace mlflow \
+            -f serving/helm/values/base.yaml \
+            -f serving/helm/values/production.yaml \
+            --set workload.enabled=false \
+            --set platform.enabled=true > rendered-platform.yaml
       - name: Render bootstrap resources
         run: |
           helm template prod-mlops-bootstrap serving/helm \
@@ -83,6 +97,8 @@ jobs:
             -strict -summary -ignore-missing-schemas /work/rendered-workload.yaml
           docker run --rm -v "$PWD:/work" ghcr.io/yannh/kubeconform:v0.6.7 \
             -strict -summary -ignore-missing-schemas /work/rendered-bootstrap.yaml
+          docker run --rm -v "$PWD:/work" ghcr.io/yannh/kubeconform:v0.6.7 \
+            -strict -summary -ignore-missing-schemas /work/rendered-platform.yaml
 
   terraform:
     runs-on: ubuntu-24.04
@@ -91,8 +107,11 @@ jobs:
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_version: "1.11.0"
-      - name: Format and validate production definitions
+      - name: Format Terraform definitions
+        run: terraform fmt -check -recursive terraform
+      - name: Validate production Terraform without a backend
         run: |
-          terraform fmt -check -recursive terraform
+          terraform -chdir=terraform/bootstrap/prod init -backend=false -input=false
+          terraform -chdir=terraform/bootstrap/prod validate
           terraform -chdir=terraform/environments/prod init -backend=false -input=false
           terraform -chdir=terraform/environments/prod validate

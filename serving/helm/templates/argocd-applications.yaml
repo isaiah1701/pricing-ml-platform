@@ -10,17 +10,100 @@ spec:
   sourceRepos:
     - {{ $repoURL }}
     - {{ .Values.externalSecretsOperator.chartRepo }}
+    - {{ .Values.argoRollouts.chartRepo }}
+    {{- range $addon := .Values.addons }}
+    {{- if $addon.enabled }}
+    - {{ $addon.chartRepo }}
+    {{- end }}
+    {{- end }}
   destinations:
+    - namespace: {{ .Values.argoRollouts.namespace }}
+      server: {{ .Values.destination.server }}
     - namespace: {{ .Values.externalSecretsOperator.namespace }}
       server: {{ .Values.destination.server }}
     - namespace: {{ .Values.destination.namespace }}
       server: {{ .Values.destination.server }}
+    - namespace: {{ .Values.platform.mlflow.namespace }}
+      server: {{ .Values.destination.server }}
+    - namespace: {{ .Values.platform.airflow.namespace }}
+      server: {{ .Values.destination.server }}
+    {{- range $addon := .Values.addons }}
+    {{- if $addon.enabled }}
+    - namespace: {{ $addon.namespace }}
+      server: {{ $.Values.destination.server }}
+    {{- end }}
+    {{- end }}
   clusterResourceWhitelist:
     - group: "*"
       kind: "*"
   namespaceResourceWhitelist:
     - group: "*"
       kind: "*"
+{{- range $key, $addon := .Values.addons }}
+{{- if $addon.enabled }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $addon.name }}
+  namespace: {{ $.Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: {{ $addon.syncWave | quote }}
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ $.Values.project.name }}
+  source:
+    repoURL: {{ $addon.chartRepo }}
+    chart: {{ $addon.chart }}
+    targetRevision: {{ $addon.chartVersion | quote }}
+    helm:
+      releaseName: {{ $addon.name }}
+      valuesObject:
+        {{- toYaml $addon.values | nindent 8 }}
+  destination:
+    server: {{ $.Values.destination.server }}
+    namespace: {{ $addon.namespace }}
+  syncPolicy:
+    syncOptions: ["CreateNamespace=true", "ServerSideApply=true"]
+    {{- if $.Values.syncPolicy.automated }}
+    automated:
+      prune: {{ $.Values.syncPolicy.prune }}
+      selfHeal: {{ $.Values.syncPolicy.selfHeal }}
+    {{- end }}
+{{- end }}
+{{- end }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Values.argoRollouts.name }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.project.name }}
+  source:
+    repoURL: {{ .Values.argoRollouts.chartRepo }}
+    chart: {{ .Values.argoRollouts.chart }}
+    targetRevision: {{ .Values.argoRollouts.chartVersion | quote }}
+    helm:
+      releaseName: {{ .Values.argoRollouts.name }}
+      valuesObject:
+        dashboard:
+          enabled: false
+  destination:
+    server: {{ .Values.destination.server }}
+    namespace: {{ .Values.argoRollouts.namespace }}
+  syncPolicy:
+    syncOptions: ["CreateNamespace=true", "ServerSideApply=true"]
+    {{- if .Values.syncPolicy.automated }}
+    automated:
+      prune: {{ .Values.syncPolicy.prune }}
+      selfHeal: {{ .Values.syncPolicy.selfHeal }}
+    {{- end }}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -58,7 +141,7 @@ spec:
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: airbnb-inference-secrets
+  name: airbnb-platform
   namespace: {{ .Release.Namespace }}
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
@@ -71,16 +154,20 @@ spec:
     targetRevision: {{ .Values.git.targetRevision }}
     path: {{ .Values.git.chartPath }}
     helm:
-      releaseName: airbnb-inference-secrets
+      releaseName: airbnb-platform
       valueFiles: ["values/base.yaml", "values/production.yaml"]
       valuesObject:
         bootstrap:
           enabled: false
         workload:
           enabled: false
+        platform:
+          enabled: true
+        externalSecret:
+          enabled: false
   destination:
     server: {{ .Values.destination.server }}
-    namespace: {{ .Values.destination.namespace }}
+    namespace: {{ .Values.platform.mlflow.namespace }}
   syncPolicy:
     syncOptions: ["CreateNamespace=true"]
     {{- if .Values.syncPolicy.automated }}

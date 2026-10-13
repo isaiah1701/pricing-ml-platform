@@ -3,7 +3,6 @@
 from feast import Entity
 from feast.value_type import ValueType
 
-
 listing: Entity = Entity(
     name="listing",
     join_keys=["id"],

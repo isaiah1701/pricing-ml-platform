@@ -4,8 +4,9 @@ import argparse
 import json
 import logging
 import os
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from feast import FeatureStore
 
@@ -15,7 +16,6 @@ from scripts.verify_feature_store import (
     FEATURE_SERVICE_NAME,
     load_known_listing,
 )
-
 
 LOGGER = logging.getLogger(__name__)
 ENTITY_JOIN_KEY: str = "id"

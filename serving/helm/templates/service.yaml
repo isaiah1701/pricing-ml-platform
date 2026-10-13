@@ -3,6 +3,30 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "airbnb.fullname" . }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics
+    prometheus.io/port: {{ .Values.service.port | quote }}
+  labels:
+    {{- include "airbnb.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "airbnb.selectorLabels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "airbnb.fullname" . }}-canary
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics
+    prometheus.io/port: {{ .Values.service.port | quote }}
   labels:
     {{- include "airbnb.labels" . | nindent 4 }}
 spec:

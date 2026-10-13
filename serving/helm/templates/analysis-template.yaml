@@ -1,0 +1,35 @@
+{{- if and .Values.workload.enabled (not .Values.bootstrap.enabled) }}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "airbnb.fullname" . }}-canary
+  labels:
+    {{- include "airbnb.labels" . | nindent 4 }}
+spec:
+  args:
+    - name: canary-service
+  metrics:
+    - name: prediction-error-rate
+      interval: {{ .Values.rollout.analysisInterval }}
+      count: {{ .Values.rollout.analysisCount }}
+      failureLimit: 1
+      successCondition: len(result) == 0 || result[0] <= {{ .Values.rollout.errorRateThreshold }}
+      provider:
+        prometheus:
+          address: {{ .Values.prometheus.address | quote }}
+          query: |
+            sum(rate(airbnb_http_requests_total{endpoint="/predict",status=~"5..",service="{{`{{args.canary-service}}`}}"}[2m]))
+            /
+            clamp_min(sum(rate(airbnb_http_requests_total{endpoint="/predict",service="{{`{{args.canary-service}}`}}"}[2m])), 0.001)
+    - name: prediction-p95-latency
+      interval: {{ .Values.rollout.analysisInterval }}
+      count: {{ .Values.rollout.analysisCount }}
+      failureLimit: 1
+      successCondition: len(result) == 0 || isNaN(result[0]) || result[0] <= {{ .Values.rollout.p95LatencyThresholdSeconds }}
+      provider:
+        prometheus:
+          address: {{ .Values.prometheus.address | quote }}
+          query: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(airbnb_prediction_latency_seconds_bucket{service="{{`{{args.canary-service}}`}}"}[2m])))
+{{- end }}

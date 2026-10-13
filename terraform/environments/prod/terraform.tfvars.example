@@ -1,0 +1,20 @@
+aws_region = "eu-west-2"
+
+platform_admin_principal_arn = "arn:aws:iam::655916164714:user/isaiahOct26"
+
+domain_name                  = "5hort.site"
+application_hostname          = "prices.5hort.site"
+create_route53_hosted_zone    = true
+route53_hosted_zone_id        = null
+
+# Replace this documentation-only address with the operator's current public
+# IPv4 /32 during bootstrap. Set public access back to false after private
+# administration through VPN, SSM, or an in-VPC runner is available.
+cluster_endpoint_public_access = true
+cluster_endpoint_public_access_cidrs = [
+  "203.0.113.10/32",
+]
+
+tags = {
+  Owner = "isaiahOct26"
+}

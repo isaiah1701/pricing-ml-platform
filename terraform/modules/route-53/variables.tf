@@ -1,6 +1,26 @@
 variable "hosted_zone_id" {
-  description = "Existing Route 53 public hosted-zone ID for the domain. The module never creates a duplicate hosted zone."
+  description = "Existing Route 53 public hosted-zone ID. Leave null when this module creates the zone."
   type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "create_hosted_zone" {
+  description = "Create the public hosted zone instead of reading an existing zone ID."
+  type        = bool
+  default     = false
+}
+
+variable "hosted_zone_name" {
+  description = "Public DNS zone to create when create_hosted_zone is true."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = !var.create_hosted_zone || (var.hosted_zone_name != null && length(trimspace(var.hosted_zone_name)) > 0)
+    error_message = "hosted_zone_name is required when create_hosted_zone is true."
+  }
 }
 
 variable "create_certificate" {

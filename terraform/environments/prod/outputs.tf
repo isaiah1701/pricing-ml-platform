@@ -14,8 +14,18 @@ output "ecr_repository_urls" {
 }
 
 output "serving_certificate_arn" {
-  description = "Validated ACM certificate for 5hort.site and its subdomains."
+  description = "Validated ACM certificate for the production domain and its subdomains."
   value       = module.route53.certificate_arn
+}
+
+output "route53_name_servers" {
+  description = "Registrar delegation targets when Terraform creates the hosted zone."
+  value       = module.route53.hosted_zone_name_servers
+}
+
+output "application_hostname" {
+  description = "Public hostname managed by ExternalDNS for the inference ingress."
+  value       = var.application_hostname
 }
 
 output "route53_hosted_zone_id" {
@@ -28,17 +38,46 @@ output "node_pool_scheduling" {
   value       = module.eks.node_pool_scheduling
 }
 
-output "inference_runtime_secret_name" {
-  description = "Secrets Manager name configured in the production Helm values."
-  value       = module.inference_runtime_secret.name
+output "platform_data_bucket" {
+  description = "Versioned and Object-Locked S3 bucket for datasets, snapshots, reports, and MLflow artifacts."
+  value       = module.platform_data.bucket_name
 }
 
-output "external_secrets_role_arn" {
-  description = "Least-privilege EKS Pod Identity role used by ESO."
-  value       = aws_iam_role.external_secrets.arn
+output "mlflow_database_secret_arn" {
+  description = "RDS-managed credential secret consumed through External Secrets Operator."
+  value       = module.mlflow_database.master_user_secret_arn
 }
 
-output "inference_artifact_role_arn" {
-  description = "Optional read-only MLflow S3 artifact role."
-  value       = try(aws_iam_role.inference[0].arn, null)
+output "airflow_database_secret_arn" {
+  description = "RDS-managed credential secret consumed through External Secrets Operator."
+  value       = module.airflow_database.master_user_secret_arn
+}
+
+output "redis_configuration_endpoint" {
+  description = "TLS Redis configuration endpoint used by Feast."
+  value       = module.redis.configuration_endpoint_address
+}
+
+output "pod_identity_role_arns" {
+  description = "Least-privilege EKS Pod Identity roles for platform workloads and controllers."
+  value       = { for name, role in aws_iam_role.pod_identity : name => role.arn }
+}
+
+output "deployment_coordinates" {
+  description = "Non-secret values used to replace production Helm placeholders before Argo CD bootstrap."
+  value = {
+    account_id                  = data.aws_caller_identity.current.account_id
+    aws_region                  = var.aws_region
+    airflow_database_secret_arn = module.airflow_database.master_user_secret_arn
+    application_hostname        = var.application_hostname
+    certificate_arn             = module.route53.certificate_arn
+    cluster_name                = module.eks.cluster_name
+    domain_name                 = var.domain_name
+    mlflow_artifact_root        = "s3://${module.platform_data.bucket_name}/${trimsuffix(var.mlflow_artifact_prefix, "/")}"
+    mlflow_database_secret_arn  = module.mlflow_database.master_user_secret_arn
+    platform_data_bucket        = module.platform_data.bucket_name
+    redis_connection_string     = "rediss://${module.redis.configuration_endpoint_address}:${module.redis.port}"
+    serving_repository          = module.ecr["serving"].repository_url
+    training_repository         = module.ecr["training"].repository_url
+  }
 }

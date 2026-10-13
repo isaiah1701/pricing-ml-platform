@@ -16,10 +16,23 @@ variable "domain_name" {
   default     = "5hort.site"
 }
 
-variable "route53_hosted_zone_id" {
-  description = "Existing Route 53 hosted-zone ID for domain_name."
+variable "application_hostname" {
+  description = "Public DNS hostname for the inference ALB."
   type        = string
-  default     = "Z03520233UBPTHEEWV0OJ"
+  default     = "prices.5hort.site"
+}
+
+variable "create_route53_hosted_zone" {
+  description = "Create the public hosted zone in this account. Set false when supplying an existing zone ID."
+  type        = bool
+  default     = true
+}
+
+variable "route53_hosted_zone_id" {
+  description = "Existing Route 53 hosted-zone ID when create_route53_hosted_zone is false."
+  type        = string
+  default     = null
+  nullable    = true
 }
 
 variable "platform_admin_principal_arn" {
@@ -27,7 +40,6 @@ variable "platform_admin_principal_arn" {
   type        = string
   default     = null
   nullable    = true
-  sensitive   = true
 }
 
 variable "vpc_cidr" {
@@ -57,7 +69,7 @@ variable "private_subnet_cidrs" {
 variable "interface_endpoint_services" {
   description = "Private AWS services exposed to workloads through interface endpoints."
   type        = list(string)
-  default     = ["ecr.api", "ecr.dkr", "logs", "sts"]
+  default     = ["ecr.api", "ecr.dkr", "logs", "secretsmanager", "sts"]
 }
 
 variable "kubernetes_version" {
@@ -166,21 +178,28 @@ variable "tags" {
   }
 }
 
-variable "inference_runtime_secret_name" {
-  description = "Secrets Manager name synchronized into the inference namespace."
-  type        = string
-  default     = "prod-mlops/prod/inference"
-
-  validation {
-    condition     = length(trimspace(var.inference_runtime_secret_name)) > 0
-    error_message = "inference_runtime_secret_name must not be empty."
-  }
-}
-
 variable "external_secrets_namespace" {
   description = "Namespace containing the External Secrets Operator controller."
   type        = string
   default     = "external-secrets"
+}
+
+variable "aws_load_balancer_controller_service_account" {
+  description = "Service account used by AWS Load Balancer Controller."
+  type        = string
+  default     = "aws-load-balancer-controller"
+}
+
+variable "cluster_autoscaler_service_account" {
+  description = "Service account used by Cluster Autoscaler."
+  type        = string
+  default     = "cluster-autoscaler"
+}
+
+variable "external_dns_service_account" {
+  description = "Service account used by ExternalDNS."
+  type        = string
+  default     = "external-dns"
 }
 
 variable "external_secrets_service_account" {
@@ -201,11 +220,62 @@ variable "inference_service_account" {
   default     = "airbnb-inference"
 }
 
-variable "mlflow_artifact_bucket_arn" {
-  description = "Optional S3 bucket ARN containing MLflow artifacts; null disables pod artifact IAM."
+variable "mlflow_namespace" {
+  description = "Namespace containing the MLflow tracking server."
   type        = string
-  default     = null
-  nullable    = true
+  default     = "mlflow"
+}
+
+variable "mlflow_service_account" {
+  description = "Service account used by the MLflow tracking server."
+  type        = string
+  default     = "mlflow"
+}
+
+variable "airflow_namespace" {
+  description = "Namespace containing the Airflow control plane and training jobs."
+  type        = string
+  default     = "airflow"
+}
+
+variable "airflow_service_account" {
+  description = "Service account used by Airflow and its training tasks."
+  type        = string
+  default     = "airflow"
+}
+
+variable "artifact_retention_days" {
+  description = "Governance-mode S3 Object Lock retention for data and model artifacts."
+  type        = number
+  default     = 90
+
+  validation {
+    condition     = var.artifact_retention_days >= 1
+    error_message = "artifact_retention_days must be at least one day."
+  }
+}
+
+variable "database_instance_class" {
+  description = "RDS instance class used independently by MLflow and Airflow."
+  type        = string
+  default     = "db.t4g.medium"
+}
+
+variable "database_backup_retention_days" {
+  description = "Automated RDS backup retention period."
+  type        = number
+  default     = 14
+
+  validation {
+    condition     = var.database_backup_retention_days >= 7 && var.database_backup_retention_days <= 35
+    error_message = "database_backup_retention_days must be between 7 and 35."
+  }
+}
+
+variable "redis_node_type" {
+  description = "ElastiCache node type for the Feast online store."
+  type        = string
+  default     = "cache.t4g.small"
 }
 
 variable "mlflow_artifact_prefix" {

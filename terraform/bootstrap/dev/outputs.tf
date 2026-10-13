@@ -19,7 +19,7 @@ output "terraform_execution_role_arn" {
 }
 
 output "environment_backend_hcl" {
-  description = "Use this value as the backend configuration when initializing terraform/environments/${var.environment}."
+  description = "Backend configuration for the matching environment root."
   value       = <<-EOT
     bucket       = "${aws_s3_bucket.terraform_state.id}"
     key          = "${local.state_key}"

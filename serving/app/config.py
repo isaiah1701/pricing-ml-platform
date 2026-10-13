@@ -23,6 +23,15 @@ class Settings(BaseSettings):
         default="airbnb-price-predictor", validation_alias="MODEL_NAME"
     )
     model_alias: str = Field(default="champion", validation_alias="MODEL_ALIAS")
+    model_refresh_interval_seconds: float = Field(
+        default=60.0, ge=0.0, validation_alias="MODEL_REFRESH_INTERVAL_SECONDS"
+    )
+    max_concurrent_predictions: int = Field(
+        default=1, ge=1, le=32, validation_alias="MAX_CONCURRENT_PREDICTIONS"
+    )
+    prediction_queue_timeout_seconds: float = Field(
+        default=5.0, gt=0.0, le=60.0, validation_alias="PREDICTION_QUEUE_TIMEOUT_SECONDS"
+    )
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
 
     @field_validator(

@@ -7,10 +7,8 @@
 **/__pycache__
 data
 docs
-feature_repo
 mlflow.db
 mlruns
-pipelines
 terraform
 tests
 *.pyc

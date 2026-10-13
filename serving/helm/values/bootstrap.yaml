@@ -15,3 +15,129 @@ project:
 destination:
   server: https://kubernetes.default.svc
   namespace: airbnb-inference
+
+addons:
+  awsLoadBalancerController:
+    enabled: true
+    name: aws-load-balancer-controller
+    namespace: kube-system
+    syncWave: "-3"
+    chartRepo: https://aws.github.io/eks-charts
+    chart: aws-load-balancer-controller
+    chartVersion: 3.6.0
+    values:
+      clusterName: prod-mlops-prod
+      region: eu-west-2
+      replicaCount: 2
+      serviceAccount:
+        create: true
+        name: aws-load-balancer-controller
+  metricsServer:
+    enabled: true
+    name: metrics-server
+    namespace: kube-system
+    syncWave: "-3"
+    chartRepo: https://kubernetes-sigs.github.io/metrics-server/
+    chart: metrics-server
+    chartVersion: 3.14.0
+    values:
+      replicas: 2
+  clusterAutoscaler:
+    enabled: true
+    name: cluster-autoscaler
+    namespace: kube-system
+    syncWave: "-3"
+    chartRepo: https://kubernetes.github.io/autoscaler
+    chart: cluster-autoscaler
+    chartVersion: 9.59.0
+    values:
+      autoDiscovery:
+        clusterName: prod-mlops-prod
+      awsRegion: eu-west-2
+      rbac:
+        serviceAccount:
+          create: true
+          name: cluster-autoscaler
+      extraArgs:
+        balance-similar-node-groups: "true"
+        expander: least-waste
+        skip-nodes-with-system-pods: "false"
+  externalDns:
+    enabled: true
+    name: external-dns
+    namespace: kube-system
+    syncWave: "-3"
+    chartRepo: https://kubernetes-sigs.github.io/external-dns/
+    chart: external-dns
+    chartVersion: 1.23.0
+    values:
+      provider:
+        name: aws
+      policy: sync
+      registry: txt
+      txtOwnerId: prod-mlops-prod
+      domainFilters:
+        - 5hort.site
+      serviceAccount:
+        create: true
+        name: external-dns
+  monitoring:
+    enabled: true
+    name: kube-prometheus-stack
+    namespace: monitoring
+    syncWave: "-2"
+    chartRepo: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    chartVersion: 92.3.0
+    values:
+      grafana:
+        enabled: true
+        sidecar:
+          dashboards:
+            enabled: true
+            searchNamespace: ALL
+      prometheus:
+        prometheusSpec:
+          retention: 15d
+          serviceMonitorSelectorNilUsesHelmValues: false
+          podMonitorSelectorNilUsesHelmValues: false
+          nodeSelector:
+            workload: system
+          storageSpec:
+            volumeClaimTemplate:
+              spec:
+                accessModes: [ReadWriteOnce]
+                resources:
+                  requests:
+                    storage: 50Gi
+      alertmanager:
+        enabled: true
+        alertmanagerSpec:
+          nodeSelector:
+            workload: system
+          storage:
+            volumeClaimTemplate:
+              spec:
+                accessModes: [ReadWriteOnce]
+                resources:
+                  requests:
+                    storage: 10Gi
+  pushgateway:
+    enabled: true
+    name: prometheus-pushgateway
+    namespace: monitoring
+    syncWave: "-2"
+    chartRepo: https://prometheus-community.github.io/helm-charts
+    chart: prometheus-pushgateway
+    chartVersion: 3.9.1
+    values:
+      serviceMonitor:
+        enabled: true
+        namespace: monitoring
+        additionalLabels:
+          release: kube-prometheus-stack
+      persistentVolume:
+        enabled: true
+        size: 5Gi
+      nodeSelector:
+        workload: system

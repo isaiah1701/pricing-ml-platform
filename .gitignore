@@ -17,8 +17,12 @@ __pycache__/
 # Feast-generated local registry state.
 feature_repo/data/
 
+# Content-addressed datasets are runtime artifacts retained outside Git.
+data/snapshots/
+
 # MLflow's local tracking database and model artifacts.
 mlflow.db
+mlflow-data/
 mlruns/
 
 # Keep shared environment inputs in the committed *.tfvars files. Put real IAM

@@ -11,11 +11,17 @@ import pandas as pd
 from feast import FeatureStore
 from redis.exceptions import ConnectionError as RedisConnectionError
 
-
 LOGGER = logging.getLogger(__name__)
 PROJECT_ROOT: Path = Path(__file__).resolve().parents[1]
-FEATURE_REPO_PATH: Path = PROJECT_ROOT / "feature_repo"
-FEATURE_DATA_PATH: Path = PROJECT_ROOT / "data" / "listing_features.parquet"
+FEATURE_REPO_PATH: Path = Path(
+    os.getenv("AIRBNB_FEATURE_REPO_PATH", PROJECT_ROOT / "feature_repo")
+).expanduser().resolve()
+FEATURE_DATA_PATH: Path = Path(
+    os.getenv(
+        "AIRBNB_FEATURE_DATA_PATH",
+        PROJECT_ROOT / "data" / "listing_features.parquet",
+    )
+).expanduser().resolve()
 FEATURE_SERVICE_NAME: str = "airbnb_price_model_v1"
 VERIFICATION_FEATURE: str = "availability_365"
 DEFAULT_REDIS_CONNECTION: str = "localhost:6379"

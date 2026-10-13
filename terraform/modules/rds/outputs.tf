@@ -27,3 +27,8 @@ output "db_subnet_group_name" {
   description = "Name of the DB subnet group used by the RDS instance."
   value       = aws_db_subnet_group.this.name
 }
+
+output "master_user_secret_arn" {
+  description = "Secrets Manager ARN containing the RDS-managed master credentials."
+  value       = try(aws_db_instance.this.master_user_secret[0].secret_arn, null)
+}

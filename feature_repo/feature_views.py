@@ -2,12 +2,10 @@
 
 from datetime import timedelta
 
+from entities import listing
 from feast import FeatureView, Field
 from feast.types import Float64, Int32, Int64, String
-
-from entities import listing
 from sources import listing_features_source
-
 
 LISTING_FEATURE_NAMES: tuple[str, ...] = (
     "neighbourhood_group",

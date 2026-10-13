@@ -1,0 +1,114 @@
+name: Publish immutable images and propose GitOps promotion
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  pull-requests: write
+
+env:
+  SERVING_ECR_REPOSITORY: prod-mlops-prod-serving
+  TRAINING_ECR_REPOSITORY: prod-mlops-prod-training
+
+concurrency:
+  group: production-images
+  cancel-in-progress: false
+
+jobs:
+  publish-production:
+    # Publishing requires both an explicit dispatch and a repository opt-in.
+    if: ${{ vars.AWS_PUBLISH_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Configure AWS credentials through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ECR_PUBLISH_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Authenticate to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Set immutable image coordinates
+        id: images
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          echo "tag=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "serving=${REGISTRY}/${SERVING_ECR_REPOSITORY}" >> "$GITHUB_OUTPUT"
+          echo "training=${REGISTRY}/${TRAINING_ECR_REPOSITORY}" >> "$GITHUB_OUTPUT"
+
+      - name: Build serving image for scanning
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: serving/app/Dockerfile
+          load: true
+          push: false
+          tags: ${{ steps.images.outputs.serving }}:${{ steps.images.outputs.tag }}
+          build-args: GIT_COMMIT=${{ github.sha }}
+
+      - name: Scan serving image
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ steps.images.outputs.serving }}:${{ steps.images.outputs.tag }}
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Build training image for scanning
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: training/Dockerfile
+          load: true
+          push: false
+          tags: ${{ steps.images.outputs.training }}:${{ steps.images.outputs.tag }}
+          build-args: GIT_COMMIT=${{ github.sha }}
+
+      - name: Scan training image
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ steps.images.outputs.training }}:${{ steps.images.outputs.tag }}
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Push immutable images
+        run: |
+          docker push "${{ steps.images.outputs.serving }}:${{ steps.images.outputs.tag }}"
+          docker push "${{ steps.images.outputs.training }}:${{ steps.images.outputs.tag }}"
+
+      - name: Update environment values only
+        uses: mikefarah/yq@v4.47.2
+        with:
+          cmd: >-
+            yq -i
+            '.image.repository = "${{ steps.images.outputs.serving }}" |
+             .image.tag = "${{ steps.images.outputs.tag }}" |
+             .trainingImage.repository = "${{ steps.images.outputs.training }}" |
+             .trainingImage.tag = "${{ steps.images.outputs.tag }}"'
+            serving/helm/values/production.yaml
+
+      - name: Open GitOps image promotion pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: gitops/images-${{ github.sha }}
+          delete-branch: true
+          commit-message: "deploy: promote images ${{ steps.images.outputs.tag }}"
+          title: "Deploy immutable images ${{ steps.images.outputs.tag }}"
+          body: |
+            Updates only production Helm values to immutable ECR image tags.
+            Argo CD will reconcile after review and merge; this workflow does not run kubectl.
+          labels: deployment,gitops
