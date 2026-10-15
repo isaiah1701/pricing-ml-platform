@@ -54,6 +54,10 @@ platform:
     databaseName: mlflow
   airflow:
     parallelism: 1
+    parsingProcesses: 1
+    dagImportTimeout: 180
+    dagFileProcessorTimeout: 240
+    minFileProcessInterval: 300
     nodeSelector:
       workload: system
     storageSize: 20Gi

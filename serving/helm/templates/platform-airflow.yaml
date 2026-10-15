@@ -37,6 +37,10 @@ data:
   OPENBLAS_NUM_THREADS: "1"
   MKL_NUM_THREADS: "1"
   AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "1"
+  AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: {{ $airflow.dagImportTimeout | default 180 | quote }}
+  AIRFLOW__DAG_PROCESSOR__PARSING_PROCESSES: {{ $airflow.parsingProcesses | default 1 | quote }}
+  AIRFLOW__DAG_PROCESSOR__DAG_FILE_PROCESSOR_TIMEOUT: {{ $airflow.dagFileProcessorTimeout | default 240 | quote }}
+  AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL: {{ $airflow.minFileProcessInterval | default 300 | quote }}
   AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
   AIRFLOW__API__BASE_URL: http://airflow.airflow.svc.cluster.local:8080
   AIRFLOW__API__WORKERS: "1"
