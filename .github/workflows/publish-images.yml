@@ -61,6 +61,12 @@ jobs:
           tags: ${{ steps.images.outputs.serving }}:${{ steps.images.outputs.tag }}
           build-args: GIT_COMMIT=${{ github.sha }}
 
+      - name: Verify serving estimator runtime
+        run: >-
+          docker run --rm --entrypoint python
+          "${{ steps.images.outputs.serving }}:${{ steps.images.outputs.tag }}"
+          -c 'from training.train import CatBoostPriceEnsembleRegressor; assert CatBoostPriceEnsembleRegressor(feature_names=("latitude",)).feature_names == ("latitude",)'
+
       - name: Scan serving image
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:

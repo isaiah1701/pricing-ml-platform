@@ -9,16 +9,13 @@ import logging
 import os
 from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import mlflow
 import mlflow.sklearn
 import numpy as np
 import pandas as pd
-import pyarrow.parquet as pq
 from catboost import CatBoostRegressor
-from feast import FeatureStore
-from feast.errors import FeatureServiceNotFoundException
-from feast.feature_service import FeatureService
 from mlflow import MlflowClient
 from mlflow.models import infer_signature
 from sklearn.base import BaseEstimator, RegressorMixin
@@ -27,15 +24,10 @@ from sklearn.metrics import mean_absolute_error, r2_score, root_mean_squared_err
 from sklearn.model_selection import train_test_split
 from sklearn.utils.validation import check_is_fitted
 
-from training.lineage import (
-    load_lineage_manifest,
-    publish_dataset_snapshot,
-    resolve_git_commit,
-    sha256_file,
-    verify_dataset_snapshot,
-)
-from training.provenance import CodeProvenance, build_code_snapshot, sha256_directory
-from training.validation import require_valid_dataset
+if TYPE_CHECKING:
+    from feast.feature_service import FeatureService
+
+    from training.provenance import CodeProvenance
 
 LOGGER = logging.getLogger(__name__)
 
@@ -76,6 +68,8 @@ CODE_SNAPSHOT_DIRECTORY = Path(
 
 def load_labels(data_path: Path) -> pd.DataFrame:
     """Load validated entity metadata and nightly-price labels."""
+    import pyarrow.parquet as pq
+
     LOGGER.info("Loading training labels from %s", data_path)
     if not data_path.is_file():
         LOGGER.error("Transformed dataset does not exist: %s", data_path)
@@ -130,6 +124,9 @@ def load_features_from_feast(
     feature_service_name: str = FEATURE_SERVICE_NAME,
 ) -> tuple[pd.DataFrame, tuple[str, ...]]:
     """Retrieve point-in-time-correct model features from Feast."""
+    from feast import FeatureStore
+    from feast.errors import FeatureServiceNotFoundException
+
     LOGGER.info("Loading Feast feature store from %s", feature_repo_path)
     store = FeatureStore(repo_path=str(feature_repo_path))
     try:
@@ -163,9 +160,7 @@ def build_training_dataset(
     if len(names) != len(set(names)):
         LOGGER.error("Duplicate predictive feature names were supplied")
         raise ValueError("Predictive feature names must be unique")
-    missing_labels = sorted(
-        {*ENTITY_COLUMNS, TARGET_COLUMN}.difference(labels.columns)
-    )
+    missing_labels = sorted({*ENTITY_COLUMNS, TARGET_COLUMN}.difference(labels.columns))
     if missing_labels:
         LOGGER.error("Labels are missing columns: %s", missing_labels)
         raise ValueError(f"Labels are missing required columns: {missing_labels}")
@@ -203,7 +198,9 @@ def build_training_dataset(
         or not feature_index.difference(label_index).empty
     ):
         LOGGER.error("Historical feature keys do not align with labels")
-        raise ValueError("Historical feature IDs and timestamps do not align with labels")
+        raise ValueError(
+            "Historical feature IDs and timestamps do not align with labels"
+        )
     x = (
         aligned_features.set_index(list(ENTITY_COLUMNS))
         .reindex(label_index)
@@ -246,7 +243,9 @@ class CatBoostPriceEnsembleRegressor(RegressorMixin, BaseEstimator):
         if not isinstance(x, pd.DataFrame):
             LOGGER.error("Champion model requires pandas inputs")
             raise TypeError("x must be a pandas DataFrame")
-        selected = [name for name in self.feature_names if name not in EXCLUDED_FEATURES]
+        selected = [
+            name for name in self.feature_names if name not in EXCLUDED_FEATURES
+        ]
         missing = sorted(set(selected).difference(x.columns))
         if missing:
             LOGGER.error("Champion model inputs are missing: %s", missing)
@@ -367,11 +366,15 @@ def evaluate_segments(
 
 def get_dataset_version(data_path: Path) -> str:
     """Return a deterministic SHA-256 digest of the transformed dataset."""
+    from training.lineage import sha256_file
+
     return sha256_file(data_path)
 
 
 def get_git_sha(project_root: Path = PROJECT_ROOT) -> str:
     """Return the checked-out Git commit SHA, or ``unknown`` when unavailable."""
+    from training.lineage import resolve_git_commit
+
     return resolve_git_commit(project_root)
 
 
@@ -424,6 +427,8 @@ def _log_lineage_manifest(
     dataset_version: str,
 ) -> str | None:
     """Verify and attach an immutable dataset plus lineage to the active run."""
+    from training.lineage import load_lineage_manifest, verify_dataset_snapshot
+
     if lineage_manifest_path is None:
         LOGGER.warning("Training run has no dataset lineage manifest")
         return None
@@ -452,15 +457,15 @@ def _log_lineage_manifest(
 
 def _log_code_provenance() -> CodeProvenance:
     """Capture and upload the exact source and dependency files for a run."""
+    from training.provenance import build_code_snapshot
+
     provenance = build_code_snapshot(PROJECT_ROOT, CODE_SNAPSHOT_DIRECTORY)
     mlflow.set_tags(
         {
             "git_sha": provenance["git_commit"],
             "mlflow.source.git.commit": provenance["git_commit"],
             "git_dirty": str(provenance["git_dirty"]).lower(),
-            "git_state_available": str(
-                provenance["git_state_available"]
-            ).lower(),
+            "git_state_available": str(provenance["git_state_available"]).lower(),
             "code_sha256": provenance["code_sha256"],
         }
     )
@@ -499,9 +504,9 @@ def _log_release_bundle(
         "git_state_available": code_provenance["git_state_available"],
         "feature_service_name": feature_service_name,
     }
-    canonical = json.dumps(
-        bundle_body, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
+    canonical = json.dumps(bundle_body, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
     bundle_id = hashlib.sha256(canonical).hexdigest()
     mlflow.set_tag("release_bundle_id", bundle_id)
     mlflow.set_tag("model_artifact_sha256", model_artifact_sha256)
@@ -548,6 +553,8 @@ def log_model_run(
     training_attempt_id: str | None = None,
 ) -> dict[str, object]:
     """Log a fitted model and provenance, then verify artifact reload."""
+    from training.provenance import sha256_directory
+
     with mlflow.start_run(run_name=run_name) as run:
         tags = {
             "model_family": model_family,
@@ -629,6 +636,8 @@ def train_and_log_champion(
     training_attempt_id: str | None = None,
 ) -> dict[str, object]:
     """Fit, evaluate, log, and reload-verify the champion model."""
+    from training.provenance import sha256_directory
+
     model.fit(x_train, y_train)
     predictions = model.predict(x_test)
     metrics = evaluate_segments(x_test, y_test, predictions)
@@ -714,6 +723,9 @@ def run_training(
     experiment_name: str = EXPERIMENT_NAME,
 ) -> dict[str, object]:
     """Run the reproducible Feast-to-MLflow champion pipeline."""
+    from training.lineage import publish_dataset_snapshot, verify_dataset_snapshot
+    from training.validation import require_valid_dataset
+
     tracking_uri = os.getenv(
         "MLFLOW_TRACKING_URI", f"sqlite:///{PROJECT_ROOT / 'mlflow.db'}"
     )
@@ -724,16 +736,20 @@ def run_training(
         resolved_data_path = data_path.expanduser().resolve()
         validation_report = require_valid_dataset(resolved_data_path)
         update_training_attempt(tracking_uri, attempt_id, "validated")
-        configured_source = Path(
-            os.getenv("AIRBNB_RAW_DATA_PATH", DEFAULT_RAW_DATA_PATH)
-        ).expanduser().resolve()
+        configured_source = (
+            Path(os.getenv("AIRBNB_RAW_DATA_PATH", DEFAULT_RAW_DATA_PATH))
+            .expanduser()
+            .resolve()
+        )
         source_path = (
             configured_source if configured_source.is_file() else resolved_data_path
         )
         source_role = "raw_input" if configured_source.is_file() else "training_input"
-        snapshot_root = Path(
-            os.getenv("AIRBNB_SNAPSHOT_ROOT", DEFAULT_SNAPSHOT_ROOT)
-        ).expanduser().resolve()
+        snapshot_root = (
+            Path(os.getenv("AIRBNB_SNAPSHOT_ROOT", DEFAULT_SNAPSHOT_ROOT))
+            .expanduser()
+            .resolve()
+        )
         published = publish_dataset_snapshot(
             resolved_data_path,
             snapshot_root,
@@ -765,9 +781,11 @@ def run_training(
             x, y, test_size=TEST_SIZE, random_state=RANDOM_STATE
         )
         configured_manifest = os.getenv("AIRBNB_LINEAGE_MANIFEST_PATH")
-        lineage_manifest = Path(
-            configured_manifest or published["lineage_manifest_path"]
-        ).expanduser().resolve()
+        lineage_manifest = (
+            Path(configured_manifest or published["lineage_manifest_path"])
+            .expanduser()
+            .resolve()
+        )
         report = train_and_log_champion(
             CatBoostPriceEnsembleRegressor(tuple(feature_names)),
             x_train,

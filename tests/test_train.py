@@ -1,6 +1,8 @@
 """Unit tests for the single champion training pipeline."""
 
 import logging
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +21,30 @@ from training.train import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def test_estimator_import_does_not_require_training_only_dependencies() -> None:
+    """Allow serving to unpickle the estimator without Feast or data tooling."""
+    LOGGER.info("Checking estimator import in a serving-only environment")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "sys.modules.update({name: None for name in "
+                "('feast', 'pyarrow', 'training.lineage', 'training.provenance', 'training.validation')}); "
+                "from training.train import CatBoostPriceEnsembleRegressor; "
+                "assert CatBoostPriceEnsembleRegressor(feature_names=('latitude',)).feature_names == ('latitude',)"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 FEATURE_NAMES: tuple[str, ...] = (
     "neighbourhood_group",
     "neighbourhood",
