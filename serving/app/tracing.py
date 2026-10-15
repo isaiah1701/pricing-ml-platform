@@ -40,6 +40,7 @@ def configure_tracing(
             {
                 "service.name": settings.otel_service_name,
                 "service.namespace": "prod-mlops",
+                "deployment.environment.name": settings.deployment_environment,
             }
         )
     )

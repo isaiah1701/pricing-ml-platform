@@ -71,6 +71,7 @@ mlflow:
     enabled: true
     experimentId: "1"
     serviceName: airbnb-inference
+    environment: production
 
 logLevel: INFO
 existingSecret: ""

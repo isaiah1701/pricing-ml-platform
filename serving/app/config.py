@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     otel_service_name: str = Field(
         default="airbnb-inference", validation_alias="OTEL_SERVICE_NAME"
     )
+    deployment_environment: str = Field(
+        default="development", validation_alias="DEPLOYMENT_ENVIRONMENT"
+    )
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
 
     @field_validator(
@@ -47,6 +50,7 @@ class Settings(BaseSettings):
         "model_alias",
         "tracing_experiment_id",
         "otel_service_name",
+        "deployment_environment",
         "log_level",
         mode="before",
     )

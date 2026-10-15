@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -15,7 +16,9 @@ from uuid import uuid4
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
+from opentelemetry import trace
 from opentelemetry.sdk.trace.export import SpanExporter
+from opentelemetry.trace import Span, Status, StatusCode
 from prometheus_client import (
     CollectorRegistry,
     Counter,
@@ -35,6 +38,7 @@ from serving.app.model_loader import (
     refresh_champion_model,
 )
 from serving.app.schemas import (
+    MODEL_FEATURE_COLUMNS,
     HealthResponse,
     ListingFeatures,
     PredictionResponse,
@@ -49,6 +53,32 @@ SAFE_PREDICTION_ERROR = "Prediction failed"
 SAFE_OVERLOADED_ERROR = "Prediction capacity is temporarily exhausted"
 ModelLoader = Callable[[Settings], LoadedModel | PredictionModel]
 ModelRefresher = Callable[[LoadedModel, Settings], LoadedModel]
+
+
+def _safe_trace_inputs(listing: ListingFeatures) -> dict[str, object]:
+    """Return bounded diagnostic inputs without exact coordinates or free text."""
+    return {
+        "neighbourhood_group": listing.neighbourhood_group,
+        "room_type": listing.room_type,
+        "minimum_nights_band": listing.minimum_nights_band,
+        "availability_band": listing.availability_band,
+        "location_cell": listing.location_cell,
+        "has_reviews": listing.has_reviews,
+        "feature_count": len(MODEL_FEATURE_COLUMNS),
+    }
+
+
+def _set_span_json(span: Span, key: str, value: dict[str, object]) -> None:
+    """Set one deterministic JSON span attribute for MLflow rendering."""
+    span.set_attribute(key, json.dumps(value, sort_keys=True, separators=(",", ":")))
+
+
+def _trace_id(span: Span) -> str | None:
+    """Return the active W3C trace identifier when the span is recording."""
+    context = span.get_span_context()
+    if not context.is_valid:
+        return None
+    return f"{context.trace_id:032x}"
 
 
 @dataclass(frozen=True)
@@ -285,30 +315,63 @@ def create_app(
         )
 
     @application.post("/predict", response_model=PredictionResponse)
-    async def predict(request: Request, listing: ListingFeatures) -> PredictionResponse:
+    async def predict(
+        request: Request,
+        response: Response,
+        listing: ListingFeatures,
+    ) -> PredictionResponse:
         """Validate one listing and return a sanitized model prediction."""
+        root_span = trace.get_current_span()
+        root_span.set_attribute("mlflow.spanType", "CHAIN")
+        root_span.set_attribute("app.operation", "predict")
+        _set_span_json(root_span, "mlflow.spanInputs", _safe_trace_inputs(listing))
         loaded: LoadedModel | None = getattr(request.app.state, "loaded_model", None)
         if loaded is None:
+            root_span.set_attribute("app.error.type", "model_not_ready")
+            root_span.set_status(Status(StatusCode.ERROR, SAFE_LOAD_ERROR))
             raise HTTPException(status_code=503, detail=SAFE_LOAD_ERROR)
         started_at = time.perf_counter()
         acquired = False
+        tracer = get_application_tracer(request.app)
         try:
-            try:
-                await asyncio.wait_for(
-                    prediction_slots.acquire(),
-                    timeout=runtime_settings.prediction_queue_timeout_seconds,
+            with tracer.start_as_current_span("prediction.queue") as queue_span:
+                queue_started_at = time.perf_counter()
+                queue_span.set_attribute(
+                    "queue.timeout_seconds",
+                    runtime_settings.prediction_queue_timeout_seconds,
                 )
-                acquired = True
-            except TimeoutError:
-                metrics.prediction_rejected.inc()
-                LOGGER.warning("Rejected prediction because execution capacity was full")
-                raise HTTPException(
-                    status_code=503,
-                    detail=SAFE_OVERLOADED_ERROR,
-                    headers={"Retry-After": "1"},
-                ) from None
+                try:
+                    await asyncio.wait_for(
+                        prediction_slots.acquire(),
+                        timeout=runtime_settings.prediction_queue_timeout_seconds,
+                    )
+                    acquired = True
+                    queue_span.set_attribute("queue.acquired", True)
+                    queue_span.set_attribute(
+                        "queue.wait_ms",
+                        (time.perf_counter() - queue_started_at) * 1000,
+                    )
+                    queue_span.set_status(Status(StatusCode.OK))
+                except TimeoutError:
+                    queue_span.set_attribute("queue.acquired", False)
+                    queue_span.set_status(
+                        Status(StatusCode.ERROR, SAFE_OVERLOADED_ERROR)
+                    )
+                    metrics.prediction_rejected.inc()
+                    LOGGER.warning(
+                        "Rejected prediction because execution capacity was full"
+                    )
+                    raise HTTPException(
+                        status_code=503,
+                        detail=SAFE_OVERLOADED_ERROR,
+                        headers={"Retry-After": "1"},
+                    ) from None
             metrics.prediction_inflight.inc()
-            tracer = get_application_tracer(request.app)
+            with tracer.start_as_current_span("features.transform") as feature_span:
+                frame = listing.to_model_frame()
+                feature_span.set_attribute("features.count", len(frame.columns))
+                feature_span.set_attribute("features.rows", len(frame.index))
+                feature_span.set_status(Status(StatusCode.OK))
             with tracer.start_as_current_span(
                 "model.predict",
                 attributes={
@@ -316,9 +379,14 @@ def create_app(
                     "model.name": runtime_settings.model_name,
                     "model.alias": runtime_settings.model_alias,
                     "model.version": loaded.version,
+                    "model.batch_size": 1,
                 },
-            ):
-                frame = listing.to_model_frame()
+            ) as model_span:
+                _set_span_json(
+                    model_span,
+                    "mlflow.spanInputs",
+                    {"rows": 1, "features": len(frame.columns)},
+                )
                 raw_prediction = await asyncio.to_thread(loaded.predict, frame)
                 values = np.asarray(raw_prediction).reshape(-1)
                 if len(values) != 1:
@@ -326,10 +394,20 @@ def create_app(
                 predicted_price = float(values[0])
                 if not np.isfinite(predicted_price) or predicted_price < 0.0:
                     raise ValueError("model returned an invalid price")
+                _set_span_json(
+                    model_span,
+                    "mlflow.spanOutputs",
+                    {"predicted_price": round(predicted_price, 2)},
+                )
+                model_span.set_status(Status(StatusCode.OK))
         except HTTPException:
+            root_span.set_attribute("app.error.type", "capacity_exhausted")
+            root_span.set_status(Status(StatusCode.ERROR, SAFE_OVERLOADED_ERROR))
             raise
         except Exception:
             metrics.prediction_failures.inc()
+            root_span.set_attribute("app.error.type", "prediction_failed")
+            root_span.set_status(Status(StatusCode.ERROR, SAFE_PREDICTION_ERROR))
             LOGGER.exception("Champion prediction failed")
             raise HTTPException(status_code=500, detail=SAFE_PREDICTION_ERROR) from None
         finally:
@@ -340,10 +418,25 @@ def create_app(
         metrics.predicted_price.observe(predicted_price)
         prediction_id = str(uuid4())
         prediction_timestamp = datetime.now(timezone.utc).isoformat()
+        trace_id = _trace_id(root_span)
+        _set_span_json(
+            root_span,
+            "mlflow.spanOutputs",
+            {
+                "model_version": loaded.version,
+                "predicted_price": round(predicted_price, 2),
+                "prediction_id": prediction_id,
+            },
+        )
+        root_span.set_attribute("app.prediction.id", prediction_id)
+        root_span.set_status(Status(StatusCode.OK))
+        if trace_id is not None:
+            response.headers["X-Trace-Id"] = trace_id
         LOGGER.debug(
-            "Completed prediction %s with model version %s",
+            "Completed prediction %s with model version %s and trace %s",
             prediction_id,
             loaded.version,
+            trace_id or "disabled",
         )
         return PredictionResponse(
             prediction_id=prediction_id,

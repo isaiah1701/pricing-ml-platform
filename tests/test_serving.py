@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from collections.abc import Callable
@@ -14,6 +15,7 @@ from fastapi.testclient import TestClient
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
     InMemorySpanExporter,
 )
+from opentelemetry.trace import StatusCode
 
 from serving.app.api import create_app
 from serving.app.config import Settings
@@ -299,19 +301,69 @@ def test_predict_exports_http_and_model_spans_without_request_payload(
         response = client.post("/predict", json=listing_payload)
 
     assert response.status_code == 200
+    assert len(response.headers["x-trace-id"]) == 32
     spans = exporter.get_finished_spans()
     request_span = next(span for span in spans if span.name == "POST /predict")
+    queue_span = next(span for span in spans if span.name == "prediction.queue")
+    feature_span = next(span for span in spans if span.name == "features.transform")
     model_span = next(span for span in spans if span.name == "model.predict")
     assert model_span.parent is not None
     assert model_span.parent.span_id == request_span.context.span_id
-    assert model_span.attributes == {
+    assert request_span.status.status_code is StatusCode.OK
+    assert queue_span.status.status_code is StatusCode.OK
+    assert feature_span.status.status_code is StatusCode.OK
+    assert model_span.status.status_code is StatusCode.OK
+    assert {
+        key: model_span.attributes[key]
+        for key in ("mlflow.spanType", "model.name", "model.alias", "model.version")
+    } == {
         "mlflow.spanType": "MODEL",
         "model.name": "test-airbnb-model",
         "model.alias": "candidate",
         "model.version": "unknown",
     }
+    assert json.loads(request_span.attributes["mlflow.spanInputs"]) == {
+        "availability_band": "medium",
+        "feature_count": 16,
+        "has_reviews": 1,
+        "location_cell": "40.76_-73.99",
+        "minimum_nights_band": "short",
+        "neighbourhood_group": "Manhattan",
+        "room_type": "Entire home/apt",
+    }
+    assert json.loads(request_span.attributes["mlflow.spanOutputs"])[
+        "predicted_price"
+    ] == 175.25
     serialized_attributes = repr(
         [dict(span.attributes or {}) for span in spans]
     )
     assert "Midtown" not in serialized_attributes
     assert "40.758" not in serialized_attributes
+
+
+def test_prediction_error_marks_trace_and_model_span_failed(
+    listing_payload: dict[str, object],
+) -> None:
+    """Make failed inference searchable by trace status and safe error category."""
+    exporter = InMemorySpanExporter()
+    tracing_settings = Settings(
+        MODEL_REFRESH_INTERVAL_SECONDS=0,
+        TRACING_ENABLED=True,
+        LOG_LEVEL="WARNING",
+    )
+    app = create_app(
+        settings=tracing_settings,
+        model_loader=successful_loader(FakePriceModel(predicted_price=float("nan"))),
+        trace_exporter=exporter,
+    )
+    with TestClient(app) as client:
+        response = client.post("/predict", json=listing_payload)
+
+    assert response.status_code == 500
+    spans = exporter.get_finished_spans()
+    request_span = next(span for span in spans if span.name == "POST /predict")
+    model_span = next(span for span in spans if span.name == "model.predict")
+    assert request_span.status.status_code is StatusCode.ERROR
+    assert request_span.attributes["app.error.type"] == "prediction_failed"
+    assert model_span.status.status_code is StatusCode.ERROR
+    assert any(event.name == "exception" for event in model_span.events)
