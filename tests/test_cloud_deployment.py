@@ -144,6 +144,9 @@ def test_airflow_runs_supervised_components_after_migrations(
     )
     allowed_hosts = arguments[arguments.index("--allowed-hosts") + 1]
     assert "mlflow.platf0rm.site" in allowed_hosts
+    assert arguments[arguments.index("--cors-allowed-origins") + 1] == (
+        "https://mlflow.platf0rm.site"
+    )
     migration, data = pod["initContainers"]
     assert "airflow db migrate" in migration["args"][0]
     assert "airflow fab-db migrate" in migration["args"][0]

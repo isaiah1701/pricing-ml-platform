@@ -53,6 +53,10 @@ spec:
             - "1"
             - --allowed-hosts
             - {{ printf "mlflow,mlflow:5000,mlflow.mlflow.svc.cluster.local,mlflow.mlflow.svc.cluster.local:5000%s" (ternary (printf ",%s" .Values.platform.publicIngress.mlflowHost) "" .Values.platform.publicIngress.enabled) | quote }}
+            {{- if .Values.platform.publicIngress.enabled }}
+            - --cors-allowed-origins
+            - {{ printf "https://%s" .Values.platform.publicIngress.mlflowHost | quote }}
+            {{- end }}
           envFrom:
             - secretRef:
                 name: mlflow-database
