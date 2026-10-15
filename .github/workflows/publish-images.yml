@@ -102,8 +102,7 @@ jobs:
             '.image.repository = "${{ steps.images.outputs.serving }}" |
              .image.tag = "${{ steps.images.outputs.tag }}" |
              .trainingImage.repository = "${{ steps.images.outputs.training }}" |
-             .trainingImage.tag = "${{ steps.images.outputs.tag }}"'
-            serving/helm/values/production.yaml
+             .trainingImage.tag = "${{ steps.images.outputs.tag }}"' serving/helm/values/production.yaml
 
       - name: Validate production coordinates and published images
         # Publishing alone needs no runtime endpoints. Operator-managed launches
