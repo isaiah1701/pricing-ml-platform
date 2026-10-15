@@ -106,6 +106,9 @@ jobs:
             serving/helm/values/production.yaml
 
       - name: Validate production coordinates and published images
+        # Publishing alone needs no runtime endpoints. Operator-managed launches
+        # run this preflight locally before committing any image promotion.
+        if: ${{ inputs.create_promotion_pr }}
         run: |
           python -m pip install PyYAML==6.0.3
           python scripts/validate_aws_deployment.py --check-images
