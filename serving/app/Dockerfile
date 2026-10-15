@@ -12,6 +12,7 @@ RUN python -m pip wheel --prefer-binary --wheel-dir /wheels --requirement requir
 FROM python:3.12-slim-bookworm
 
 ARG GIT_COMMIT=unknown
+LABEL com.docker.compose.project="mlops-platform"
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
@@ -26,11 +27,10 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 RUN groupadd --system --gid 10001 app \
     && useradd --system --no-log-init --uid 10001 --gid app --home-dir /tmp --shell /usr/sbin/nologin app
-COPY --link --from=builder /wheels /wheels
 COPY --link serving/app/requirements.txt ./requirements.txt
-RUN python -m pip install --no-cache-dir --no-index --find-links=/wheels --requirement requirements.txt \
-    && python -m pip check \
-    && rm -rf /wheels
+RUN --mount=type=bind,from=builder,source=/wheels,target=/wheels \
+    python -m pip install --no-cache-dir --no-index --find-links=/wheels --requirement requirements.txt \
+    && python -m pip check
 COPY --link --chown=10001:10001 serving/__init__.py ./serving/
 COPY --link --chown=10001:10001 serving/app ./serving/app/
 COPY --link --chown=10001:10001 training/__init__.py training/train.py ./training/

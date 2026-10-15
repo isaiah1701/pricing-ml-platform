@@ -61,6 +61,8 @@ spec:
               value: {{ .Values.platform.awsRegion | quote }}
             - name: AWS_DEFAULT_REGION
               value: {{ .Values.platform.awsRegion | quote }}
+            - name: MLFLOW_S3_ENDPOINT_URL
+              value: {{ printf "https://s3.%s.amazonaws.com" .Values.platform.awsRegion | quote }}
             - name: MLFLOW_DISABLE_AGENT_HINT
               value: "1"
           ports:

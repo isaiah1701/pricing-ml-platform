@@ -107,10 +107,23 @@ def test_https_uses_cert_manager_secret_and_traefik(
     LOGGER.info("Checking rendered certificate and TLS routing")
     certificate = _resource(rendered_resources, "Certificate", "airbnb-inference")
     issuer = _resource(rendered_resources, "Issuer", "letsencrypt")
+    middleware = _resource(
+        rendered_resources, "Middleware", "airbnb-inference-root-redirect"
+    )
     route = _resource(rendered_resources, "IngressRoute", "airbnb-inference")
     weighted = _resource(rendered_resources, "TraefikService", "airbnb-inference")
     assert certificate["spec"]["dnsNames"] == ["platf0rm.site"]
-    assert route["spec"]["routes"][0]["match"] == "Host(`platf0rm.site`)"
+    root_route, application_route = route["spec"]["routes"]
+    assert root_route["match"] == "Host(`platf0rm.site`) && Path(`/`)"
+    assert root_route["middlewares"] == [
+        {"name": "airbnb-inference-root-redirect"}
+    ]
+    assert application_route["match"] == "Host(`platf0rm.site`)"
+    assert middleware["spec"]["redirectRegex"] == {
+        "regex": "^https://[^/]+/?$",
+        "replacement": "https://platf0rm.site/demo",
+        "permanent": False,
+    }
     bootstrap = yaml.safe_load(
         (CHART_PATH / "values/bootstrap.yaml").read_text(encoding="utf-8")
     )
@@ -129,7 +142,8 @@ def test_https_uses_cert_manager_secret_and_traefik(
         issuer["spec"]["acme"]["solvers"][0]["http01"]["ingress"]["ingressClassName"]
         == "traefik"
     )
-    assert route["spec"]["routes"][0]["services"][0]["kind"] == "TraefikService"
+    assert root_route["services"][0]["kind"] == "TraefikService"
+    assert application_route["services"][0]["kind"] == "TraefikService"
     assert [
         service["name"] for service in weighted["spec"]["weighted"]["services"]
     ] == ["airbnb-inference", "airbnb-inference-canary"]

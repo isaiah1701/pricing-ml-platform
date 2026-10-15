@@ -13,6 +13,7 @@ RUN uv sync --frozen --no-install-project --extra orchestration
 FROM python:3.12-slim-bookworm
 
 ARG GIT_COMMIT=unknown
+LABEL com.docker.compose.project="mlops-platform"
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \

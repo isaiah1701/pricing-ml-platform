@@ -29,14 +29,17 @@ account-specific names:
 
 ```sh
 cd terraform/environments/prod
-terraform init \
+../../../scripts/terraform.sh init \
   -backend-config="bucket=<terraform-state-bucket>" \
   -backend-config="key=prod-mlops/prod/terraform.tfstate" \
   -backend-config="region=eu-west-2" \
   -backend-config="encrypt=true" \
   -backend-config="use_lockfile=true"
-terraform plan
+../../../scripts/terraform.sh plan
 ```
+
+The wrapper configures a user-level provider cache. This avoids storing another
+copy of the approximately 800 MB AWS provider in every Terraform root module.
 
 Use `terraform/environments/prod/terraform.tfvars.example` as the reviewed
 input template. If `platform_admin_principal_arn` is left unset, the Terraform

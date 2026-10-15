@@ -26,6 +26,16 @@ spec:
     kind: Issuer
 ---
 apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "airbnb.fullname" . }}-root-redirect
+spec:
+  redirectRegex:
+    regex: ^https://[^/]+/?$
+    replacement: {{ printf "https://%s/demo" .Values.ingress.host | quote }}
+    permanent: false
+---
+apiVersion: traefik.io/v1alpha1
 kind: TraefikService
 metadata:
   name: {{ include "airbnb.fullname" . }}
@@ -44,6 +54,14 @@ metadata:
 spec:
   entryPoints: [websecure]
   routes:
+    - match: Host(`{{ .Values.ingress.host }}`) && Path(`/`)
+      kind: Rule
+      priority: 100
+      middlewares:
+        - name: {{ include "airbnb.fullname" . }}-root-redirect
+      services:
+        - name: {{ include "airbnb.fullname" . }}
+          kind: TraefikService
     - match: Host(`{{ .Values.ingress.host }}`)
       kind: Rule
       services:

@@ -132,6 +132,7 @@ def test_airflow_runs_supervised_components_after_migrations(
         for item in mlflow["spec"]["template"]["spec"]["containers"][0]["env"]
     }
     assert environment["AWS_DEFAULT_REGION"] == environment["AWS_REGION"] == "eu-west-2"
+    assert environment["MLFLOW_S3_ENDPOINT_URL"] == "https://s3.eu-west-2.amazonaws.com"
     assert len(environment) == len(
         mlflow["spec"]["template"]["spec"]["containers"][0]["env"]
     )

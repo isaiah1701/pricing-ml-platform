@@ -12,3 +12,38 @@ production-shaped local-to-EKS serving path.
 - [Canary delivery, CI/CD, and GitOps](docs/CANARY_DELIVERY.md)
 - [Data validation, immutable snapshots, and lineage](docs/DATA_GOVERNANCE.md)
 - [Model problem and experiment history](docs/PROBLEM.md)
+
+## Local disk hygiene
+
+Terraform providers and repeated container builds are the largest local disk
+consumers. Run Terraform through the cache-aware wrapper so provider binaries
+are shared between root modules:
+
+```sh
+cd terraform/environments/prod
+../../../scripts/terraform.sh init -backend=false
+```
+
+Remove reproducible repository artifacts after infrastructure validation:
+
+```sh
+scripts/cleanup_local_artifacts.sh
+```
+
+Use the Compose wrapper for local builds and stack updates. After a successful
+update it automatically prunes superseded images belonging to this project:
+
+```sh
+scripts/compose.sh up --build --detach
+```
+
+For manual builds or periodic deep cleanup, remove unused images for this
+Compose project and clear uv's reinstallable package cache:
+
+```sh
+scripts/cleanup_local_artifacts.sh --docker --global-cache
+```
+
+The cleanup intentionally preserves datasets, MLflow runs and models, `.venv`,
+Docker volumes, and every image referenced by a container. If Docker uses a
+non-default context, prefix the command with `DOCKER_CONTEXT=<context>`.
