@@ -123,6 +123,12 @@ def test_airflow_runs_supervised_components_after_migrations(
     )
     arguments = mlflow["spec"]["template"]["spec"]["containers"][0]["args"]
     assert arguments[arguments.index("--workers") + 1] == "1"
+    assert (
+        mlflow["spec"]["template"]["spec"]["containers"][0]["startupProbe"][
+            "failureThreshold"
+        ]
+        == 60
+    )
     migration, data = pod["initContainers"]
     assert "airflow db migrate" in migration["args"][0]
     assert "airflow fab-db migrate" in migration["args"][0]
@@ -142,6 +148,11 @@ def test_airflow_runs_supervised_components_after_migrations(
         } == {"airflow-database", "airflow-runtime"}
         for probe in ("startupProbe", "readinessProbe", "livenessProbe"):
             assert "tcpSocket" not in container[probe]
+            if container["name"] in ("dag-processor", "triggerer"):
+                command = container[probe]["exec"]["command"]
+                assert command[:2] == ["python", "-c"]
+                assert "latest_heartbeat" in command[2]
+                assert "socket.gethostname()" in command[2]
     runtime = next(
         r
         for r in platform

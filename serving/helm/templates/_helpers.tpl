@@ -14,12 +14,20 @@ httpGet:
 {{- else }}
 exec:
   command:
-    - airflow
-    - jobs
-    - check
-    - --job-type
-    - {{ if eq . "dag-processor" }}DagProcessorJob{{ else }}TriggererJob{{ end }}
-    - --local
+    - python
+    - -c
+    - |
+      import logging, os, socket, sys
+      import psycopg2
+      connection = psycopg2.connect(os.environ["AIRFLOW__DATABASE__SQL_ALCHEMY_CONN"].replace("postgresql+psycopg2:", "postgresql:", 1), connect_timeout=3, options="-c statement_timeout=3000")
+      cursor = connection.cursor()
+      cursor.execute("SELECT EXISTS (SELECT 1 FROM job WHERE job_type = %s AND hostname = %s AND state = 'running' AND latest_heartbeat > now() - interval '120 seconds')", ("{{ if eq . "dag-processor" }}DagProcessorJob{{ else }}TriggererJob{{ end }}", socket.gethostname()))
+      healthy = cursor.fetchone()[0]
+      cursor.close()
+      connection.close()
+      if not healthy:
+          logging.warning("Airflow component heartbeat is absent or stale")
+      sys.exit(0 if healthy else 1)
 {{- end }}
 {{- end }}
 
