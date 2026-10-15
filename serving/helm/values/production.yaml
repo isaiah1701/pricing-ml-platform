@@ -4,7 +4,7 @@ image:
   pullPolicy: IfNotPresent
 trainingImage:
   repository: 655916164714.dkr.ecr.eu-west-2.amazonaws.com/prod-mlops-prod-training
-  tag: sha-a388ced6ef96247afe870d34279908031dfaefa9
+  tag: sha-c31d5322b8204967dfa88ab24e98ca87b7b96a2c
 ingress:
   enabled: true
   className: traefik
