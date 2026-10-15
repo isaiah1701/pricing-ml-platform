@@ -108,3 +108,34 @@ Import or provision the three dashboards in
 
 The dashboards intentionally use only bounded labels. Request features and raw
 listing data are never exported as metrics.
+
+## Production web access
+
+Production exposes Grafana at `https://grafana.platf0rm.site` and MLflow at
+`https://mlflow.platf0rm.site`. Both routes terminate TLS at Traefik. Grafana
+uses its built-in login, while the MLflow route requires Basic Auth before a
+request reaches the otherwise internal MLflow service.
+
+Retrieve the Grafana administrator username and password from its Kubernetes
+Secret:
+
+```sh
+kubectl -n monitoring get secret kube-prometheus-stack-grafana \
+  -o jsonpath='{.data.admin-user}' | base64 --decode
+kubectl -n monitoring get secret kube-prometheus-stack-grafana \
+  -o jsonpath='{.data.admin-password}' | base64 --decode
+```
+
+Retrieve the MLflow username and password from AWS Secrets Manager without
+placing either value in Git:
+
+```sh
+aws secretsmanager get-secret-value \
+  --region eu-west-2 \
+  --secret-id prod-mlops-prod/mlflow-public-auth \
+  --query SecretString \
+  --output text | jq -r 'fromjson | .username, .password'
+```
+
+Prometheus and Alertmanager remain private because they do not have an
+application login in this deployment.

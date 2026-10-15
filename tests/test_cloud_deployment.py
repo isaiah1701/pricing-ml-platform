@@ -142,6 +142,8 @@ def test_airflow_runs_supervised_components_after_migrations(
         ]
         == 60
     )
+    allowed_hosts = arguments[arguments.index("--allowed-hosts") + 1]
+    assert "mlflow.platf0rm.site" in allowed_hosts
     migration, data = pod["initContainers"]
     assert "airflow db migrate" in migration["args"][0]
     assert "airflow fab-db migrate" in migration["args"][0]
@@ -179,6 +181,46 @@ def test_airflow_runs_supervised_components_after_migrations(
         "AIRFLOW__API__SECRET_KEY",
         "AIRFLOW_ADMIN_PASSWORD",
     } <= keys.keys()
+
+
+def test_public_observability_ingress_is_tls_and_mlflow_is_authenticated(
+    platform: list[dict[str, Any]],
+) -> None:
+    """Expose Grafana and MLflow while requiring edge authentication for MLflow."""
+    LOGGER.info("Checking public observability ingress controls")
+    routes = {
+        resource["metadata"]["name"]: resource
+        for resource in platform
+        if resource["kind"] == "IngressRoute"
+    }
+    certificates = {
+        resource["metadata"]["name"]: resource
+        for resource in platform
+        if resource["kind"] == "Certificate"
+    }
+    mlflow_route = routes["mlflow-public"]
+    assert mlflow_route["spec"]["routes"][0]["match"] == (
+        "Host(`mlflow.platf0rm.site`)"
+    )
+    assert mlflow_route["spec"]["routes"][0]["middlewares"] == [
+        {"name": "mlflow-public-auth"}
+    ]
+    assert certificates["mlflow-public"]["spec"]["dnsNames"] == [
+        "mlflow.platf0rm.site"
+    ]
+    assert certificates["grafana-public"]["spec"]["dnsNames"] == [
+        "grafana.platf0rm.site"
+    ]
+    external_secret = next(
+        resource
+        for resource in platform
+        if resource["kind"] == "ExternalSecret"
+        and resource["metadata"]["name"] == "mlflow-public-auth"
+    )
+    assert external_secret["spec"]["data"][0]["remoteRef"] == {
+        "key": "prod-mlops-prod/mlflow-public-auth",
+        "property": "users",
+    }
 
 
 @pytest.mark.parametrize("redis_type", ["redis", "redis_cluster"])

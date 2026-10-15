@@ -130,12 +130,15 @@ def test_https_uses_cert_manager_secret_and_traefik(
     assert bootstrap["addons"]["externalDns"]["values"]["domainFilters"] == [
         "platf0rm.site"
     ]
-    assert (
+    assert set(
         bootstrap["addons"]["traefik"]["values"]["service"]["annotations"][
             "external-dns.kubernetes.io/hostname"
-        ]
-        == "platf0rm.site"
-    )
+        ].split(",")
+    ) == {
+        "platf0rm.site",
+        "grafana.platf0rm.site",
+        "mlflow.platf0rm.site",
+    }
     assert certificate["spec"]["issuerRef"]["name"] == issuer["metadata"]["name"]
     assert route["spec"]["tls"]["secretName"] == certificate["spec"]["secretName"]
     assert (

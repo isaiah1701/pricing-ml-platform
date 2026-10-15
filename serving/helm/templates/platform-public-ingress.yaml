@@ -1,0 +1,97 @@
+{{- if and .Values.platform.enabled (not .Values.bootstrap.enabled) .Values.platform.publicIngress.enabled }}
+{{- $public := .Values.platform.publicIngress }}
+{{- range $endpoint := list (dict "name" "grafana-public" "namespace" "monitoring" "host" $public.grafanaHost) (dict "name" "mlflow-public" "namespace" .Values.platform.mlflow.namespace "host" $public.mlflowHost) }}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $public.issuerName }}
+  namespace: {{ $endpoint.namespace }}
+spec:
+  acme:
+    server: {{ $public.acmeServer | quote }}
+    privateKeySecretRef:
+      name: {{ $public.issuerName }}-account
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: traefik
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $endpoint.name }}
+  namespace: {{ $endpoint.namespace }}
+spec:
+  secretName: {{ $endpoint.name }}-tls
+  dnsNames:
+    - {{ required (printf "platform.publicIngress host is required for %s" $endpoint.name) $endpoint.host | quote }}
+  issuerRef:
+    name: {{ $public.issuerName }}
+    kind: Issuer
+{{- end }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $public.mlflowAuthSecretName }}
+  namespace: {{ .Values.platform.mlflow.namespace }}
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    name: {{ .Values.platform.secretStoreName }}
+    kind: ClusterSecretStore
+  target:
+    name: {{ $public.mlflowAuthSecretName }}
+    creationPolicy: Owner
+    deletionPolicy: Retain
+  data:
+    - secretKey: users
+      remoteRef:
+        key: {{ required "platform.publicIngress.mlflowAuthRemoteKey is required" $public.mlflowAuthRemoteKey | quote }}
+        property: users
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: mlflow-public-auth
+  namespace: {{ .Values.platform.mlflow.namespace }}
+spec:
+  basicAuth:
+    secret: {{ $public.mlflowAuthSecretName }}
+    removeHeader: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: mlflow-public
+  namespace: {{ .Values.platform.mlflow.namespace }}
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`{{ $public.mlflowHost }}`)
+      kind: Rule
+      middlewares:
+        - name: mlflow-public-auth
+      services:
+        - name: mlflow
+          port: 5000
+  tls:
+    secretName: mlflow-public-tls
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: grafana-public
+  namespace: monitoring
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`{{ $public.grafanaHost }}`)
+      kind: Rule
+      services:
+        - name: kube-prometheus-stack-grafana
+          port: 80
+  tls:
+    secretName: grafana-public-tls
+{{- end }}

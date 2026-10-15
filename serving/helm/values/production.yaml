@@ -38,6 +38,11 @@ existingSecret: ''
 platform:
   enabled: false
   awsRegion: eu-west-2
+  publicIngress:
+    enabled: true
+    grafanaHost: grafana.platf0rm.site
+    mlflowHost: mlflow.platf0rm.site
+    mlflowAuthRemoteKey: prod-mlops-prod/mlflow-public-auth
   mlflow:
     replicas: 1
     resources:

@@ -111,6 +111,12 @@ module "ecr" {
   tags            = local.common_tags
 }
 
+resource "aws_secretsmanager_secret" "mlflow_public_auth" {
+  name                    = "${local.name}/mlflow-public-auth"
+  description             = "Traefik Basic Auth credentials for the public MLflow endpoint"
+  recovery_window_in_days = 7
+}
+
 module "eks" {
   source = "../../modules/eks"
 
@@ -275,6 +281,7 @@ data "aws_iam_policy_document" "external_secrets" {
     resources = [
       module.mlflow_database.master_user_secret_arn,
       module.airflow_database.master_user_secret_arn,
+      aws_secretsmanager_secret.mlflow_public_auth.arn,
     ]
   }
 }

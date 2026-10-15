@@ -43,6 +43,11 @@ output "mlflow_database_secret_arn" {
   value       = module.mlflow_database.master_user_secret_arn
 }
 
+output "mlflow_public_auth_secret_arn" {
+  description = "ARN of the operator-populated MLflow public Basic Auth secret."
+  value       = aws_secretsmanager_secret.mlflow_public_auth.arn
+}
+
 output "airflow_database_secret_arn" {
   description = "RDS-managed credential secret consumed through External Secrets Operator."
   value       = module.airflow_database.master_user_secret_arn

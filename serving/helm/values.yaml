@@ -148,6 +148,14 @@ platform:
   enabled: false
   awsRegion: eu-west-2
   secretStoreName: platform-aws-secrets-manager
+  publicIngress:
+    enabled: false
+    grafanaHost: ""
+    mlflowHost: ""
+    issuerName: letsencrypt
+    acmeServer: https://acme-v02.api.letsencrypt.org/directory
+    mlflowAuthSecretName: mlflow-public-auth
+    mlflowAuthRemoteKey: ""
   mlflow:
     namespace: mlflow
     serviceAccountName: mlflow

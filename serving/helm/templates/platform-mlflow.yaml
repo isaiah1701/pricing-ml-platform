@@ -52,7 +52,7 @@ spec:
             - --workers
             - "1"
             - --allowed-hosts
-            - mlflow,mlflow:5000,mlflow.mlflow.svc.cluster.local,mlflow.mlflow.svc.cluster.local:5000
+            - {{ printf "mlflow,mlflow:5000,mlflow.mlflow.svc.cluster.local,mlflow.mlflow.svc.cluster.local:5000%s" (ternary (printf ",%s" .Values.platform.publicIngress.mlflowHost) "" .Values.platform.publicIngress.enabled) | quote }}
           envFrom:
             - secretRef:
                 name: mlflow-database
