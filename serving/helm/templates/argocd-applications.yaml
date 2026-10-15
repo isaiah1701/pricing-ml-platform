@@ -94,6 +94,10 @@ spec:
       valuesObject:
         dashboard:
           enabled: false
+        controller:
+          resources:
+            requests: {cpu: 25m, memory: 96Mi}
+            limits: {memory: 256Mi}
   destination:
     server: {{ .Values.destination.server }}
     namespace: {{ .Values.argoRollouts.namespace }}
@@ -124,6 +128,17 @@ spec:
       releaseName: {{ .Values.externalSecretsOperator.name }}
       valuesObject:
         installCRDs: true
+        resources:
+          requests: {cpu: 25m, memory: 64Mi}
+          limits: {memory: 192Mi}
+        webhook:
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+        certController:
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
         serviceAccount:
           create: true
           name: {{ .Values.externalSecretsOperator.serviceAccountName }}

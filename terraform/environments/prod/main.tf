@@ -87,7 +87,8 @@ module "vpc" {
   azs                         = var.azs
   public_subnet_cidrs         = var.public_subnet_cidrs
   private_subnet_cidrs        = var.private_subnet_cidrs
-  single_nat_gateway          = false
+  single_nat_gateway          = var.cost_optimized
+  enable_interface_endpoints  = !var.cost_optimized
   interface_endpoint_services = var.interface_endpoint_services
   tags                        = local.common_tags
 }
@@ -120,13 +121,21 @@ module "eks" {
   load_balancer_security_group_id      = module.vpc.load_balancer_security_group_id
   cluster_endpoint_public_access       = var.cluster_endpoint_public_access
   cluster_endpoint_public_access_cidrs = var.cluster_endpoint_public_access_cidrs
-  system_node_pool                     = var.system_node_pool
-  serving_node_pool                    = var.serving_node_pool
-  training_node_pool                   = var.training_node_pool
-  access_entries                       = local.access_entries
-  bootstrap_cluster_creator_admin      = var.platform_admin_principal_arn == null
-  kms_key_administrators               = var.platform_admin_principal_arn == null ? var.kms_key_administrators : distinct(concat([var.platform_admin_principal_arn], var.kms_key_administrators))
-  tags                                 = local.common_tags
+  shared_node_pool                     = var.cost_optimized
+  system_node_pool = var.cost_optimized ? {
+    instance_types = ["r5a.large"]
+    min_size       = 1
+    max_size       = 1
+    desired_size   = 1
+    disk_size      = 60
+    capacity_type  = "ON_DEMAND"
+  } : var.system_node_pool
+  serving_node_pool               = var.serving_node_pool
+  training_node_pool              = var.training_node_pool
+  access_entries                  = local.access_entries
+  bootstrap_cluster_creator_admin = var.platform_admin_principal_arn == null
+  kms_key_administrators          = var.platform_admin_principal_arn == null ? var.kms_key_administrators : distinct(concat([var.platform_admin_principal_arn], var.kms_key_administrators))
+  tags                            = local.common_tags
 }
 
 module "platform_data" {
@@ -162,41 +171,43 @@ resource "aws_vpc_security_group_ingress_rule" "postgresql_from_eks" {
 module "mlflow_database" {
   source = "../../modules/rds"
 
-  database_identifier         = "${local.name}-mlflow"
-  database_name               = "mlflow"
-  username                    = "mlflow_admin"
-  manage_master_user_password = true
-  instance_class              = var.database_instance_class
-  allocated_storage           = 20
-  max_allocated_storage       = 100
-  subnet_ids                  = module.vpc.private_subnet_ids
-  security_group_ids          = [aws_security_group.postgresql.id]
-  backup_retention_period     = var.database_backup_retention_days
-  multi_az                    = true
-  deletion_protection         = true
-  skip_final_snapshot         = false
-  final_snapshot_identifier   = "${local.name}-mlflow-final"
-  tags                        = local.common_tags
+  database_identifier          = "${local.name}-mlflow"
+  database_name                = "mlflow"
+  username                     = "mlflow_admin"
+  manage_master_user_password  = true
+  instance_class               = var.cost_optimized ? "db.t4g.micro" : var.database_instance_class
+  allocated_storage            = 20
+  max_allocated_storage        = 100
+  subnet_ids                   = module.vpc.private_subnet_ids
+  security_group_ids           = [aws_security_group.postgresql.id]
+  backup_retention_period      = var.database_backup_retention_days
+  multi_az                     = !var.cost_optimized
+  performance_insights_enabled = !var.cost_optimized
+  deletion_protection          = true
+  skip_final_snapshot          = false
+  final_snapshot_identifier    = "${local.name}-mlflow-final"
+  tags                         = local.common_tags
 }
 
 module "airflow_database" {
   source = "../../modules/rds"
 
-  database_identifier         = "${local.name}-airflow"
-  database_name               = "airflow"
-  username                    = "airflow_admin"
-  manage_master_user_password = true
-  instance_class              = var.database_instance_class
-  allocated_storage           = 20
-  max_allocated_storage       = 100
-  subnet_ids                  = module.vpc.private_subnet_ids
-  security_group_ids          = [aws_security_group.postgresql.id]
-  backup_retention_period     = var.database_backup_retention_days
-  multi_az                    = true
-  deletion_protection         = true
-  skip_final_snapshot         = false
-  final_snapshot_identifier   = "${local.name}-airflow-final"
-  tags                        = local.common_tags
+  database_identifier          = "${local.name}-airflow"
+  database_name                = "airflow"
+  username                     = "airflow_admin"
+  manage_master_user_password  = true
+  instance_class               = var.cost_optimized ? "db.t4g.micro" : var.database_instance_class
+  allocated_storage            = 20
+  max_allocated_storage        = 100
+  subnet_ids                   = module.vpc.private_subnet_ids
+  security_group_ids           = [aws_security_group.postgresql.id]
+  backup_retention_period      = var.database_backup_retention_days
+  multi_az                     = !var.cost_optimized
+  performance_insights_enabled = !var.cost_optimized
+  deletion_protection          = true
+  skip_final_snapshot          = false
+  final_snapshot_identifier    = "${local.name}-airflow-final"
+  tags                         = local.common_tags
 }
 
 module "redis" {
@@ -206,7 +217,8 @@ module "redis" {
   vpc_id                     = module.vpc.vpc_id
   subnet_ids                 = module.vpc.private_subnet_ids
   allowed_security_group_ids = [module.eks.node_security_group_id]
-  node_type                  = var.redis_node_type
+  node_type                  = var.cost_optimized ? "cache.t4g.micro" : var.redis_node_type
+  replicas_per_node_group    = var.cost_optimized ? 0 : 1
   transit_encryption_enabled = true
   tags                       = local.common_tags
 }

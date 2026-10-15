@@ -165,6 +165,15 @@ platform:
         cpu: "1"
         memory: 2Gi
   airflow:
+    nodeSelector:
+      workload: training
+    componentResources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
     namespace: airflow
     serviceAccountName: airflow
     databaseSecretArn: ""

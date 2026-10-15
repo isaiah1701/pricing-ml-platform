@@ -29,6 +29,9 @@ addons:
       reloader:
         reloadStrategy: annotations
         deployment:
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
           nodeSelector:
             workload: system
   certManager:
@@ -42,6 +45,17 @@ addons:
     values:
       crds:
         enabled: true
+      resources:
+        requests: {cpu: 10m, memory: 64Mi}
+        limits: {memory: 256Mi}
+      webhook:
+        resources:
+          requests: {cpu: 10m, memory: 32Mi}
+          limits: {memory: 128Mi}
+      cainjector:
+        resources:
+          requests: {cpu: 10m, memory: 64Mi}
+          limits: {memory: 256Mi}
       nodeSelector:
         workload: system
   traefik:
@@ -54,7 +68,10 @@ addons:
     chartVersion: 41.7.1
     values:
       deployment:
-        replicas: 2
+        replicas: 1
+      resources:
+        requests: {cpu: 50m, memory: 96Mi}
+        limits: {memory: 256Mi}
       nodeSelector:
         workload: system
       providers:
@@ -90,7 +107,10 @@ addons:
     values:
       clusterName: prod-mlops-prod
       region: eu-west-2
-      replicaCount: 2
+      replicaCount: 1
+      resources:
+        requests: {cpu: 50m, memory: 128Mi}
+        limits: {memory: 256Mi}
       serviceAccount:
         create: true
         name: aws-load-balancer-controller
@@ -103,9 +123,12 @@ addons:
     chart: metrics-server
     chartVersion: 3.14.0
     values:
-      replicas: 2
+      replicas: 1
+      resources:
+        requests: {cpu: 50m, memory: 96Mi}
+        limits: {memory: 256Mi}
   clusterAutoscaler:
-    enabled: true
+    enabled: false
     name: cluster-autoscaler
     namespace: kube-system
     syncWave: "-3"
@@ -140,6 +163,9 @@ addons:
       txtOwnerId: prod-mlops-prod
       domainFilters:
         - platf0rm.site
+      resources:
+        requests: {cpu: 10m, memory: 64Mi}
+        limits: {memory: 256Mi}
       serviceAccount:
         create: true
         name: external-dns
@@ -154,13 +180,19 @@ addons:
     values:
       grafana:
         enabled: true
+        resources:
+          requests: {cpu: 25m, memory: 128Mi}
+          limits: {memory: 384Mi}
         sidecar:
           dashboards:
             enabled: true
             searchNamespace: ALL
       prometheus:
         prometheusSpec:
-          retention: 15d
+          retention: 2d
+          resources:
+            requests: {cpu: 100m, memory: 512Mi}
+            limits: {memory: 1Gi}
           serviceMonitorSelectorNilUsesHelmValues: false
           podMonitorSelectorNilUsesHelmValues: false
           nodeSelector:
@@ -172,10 +204,13 @@ addons:
                 accessModes: [ReadWriteOnce]
                 resources:
                   requests:
-                    storage: 50Gi
+                    storage: 10Gi
       alertmanager:
         enabled: true
         alertmanagerSpec:
+          resources:
+            requests: {cpu: 10m, memory: 64Mi}
+            limits: {memory: 128Mi}
           nodeSelector:
             workload: system
           storage:
@@ -185,7 +220,19 @@ addons:
                 accessModes: [ReadWriteOnce]
                 resources:
                   requests:
-                    storage: 10Gi
+                    storage: 2Gi
+      prometheusOperator:
+        resources:
+          requests: {cpu: 25m, memory: 96Mi}
+          limits: {memory: 256Mi}
+      kube-state-metrics:
+        resources:
+          requests: {cpu: 10m, memory: 64Mi}
+          limits: {memory: 192Mi}
+      prometheus-node-exporter:
+        resources:
+          requests: {cpu: 10m, memory: 32Mi}
+          limits: {memory: 128Mi}
   pushgateway:
     enabled: true
     name: prometheus-pushgateway
@@ -202,7 +249,10 @@ addons:
           release: kube-prometheus-stack
       persistentVolume:
         enabled: true
-        size: 5Gi
+        size: 1Gi
         storageClass: gp3
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {memory: 128Mi}
       nodeSelector:
         workload: system

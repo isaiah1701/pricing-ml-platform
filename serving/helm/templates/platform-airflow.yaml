@@ -33,6 +33,10 @@ data:
   AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
   AIRFLOW__CORE__EXECUTOR: LocalExecutor
   AIRFLOW__CORE__PARALLELISM: {{ $airflow.parallelism | quote }}
+  OMP_NUM_THREADS: "1"
+  OPENBLAS_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "1"
   AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
   AIRFLOW__API__BASE_URL: http://airflow.airflow.svc.cluster.local:8080
   AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://localhost:8080/execution/
@@ -165,12 +169,7 @@ spec:
             {{- if eq $component "scheduler" }}
             {{- toYaml $airflow.resources | nindent 12 }}
             {{- else }}
-            requests:
-              cpu: 250m
-              memory: 512Mi
-            limits:
-              cpu: "1"
-              memory: 2Gi
+            {{- toYaml $airflow.componentResources | nindent 12 }}
             {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
@@ -181,7 +180,7 @@ spec:
               mountPath: /opt/airflow
       {{- end }}
       nodeSelector:
-        workload: training
+        {{- toYaml $airflow.nodeSelector | nindent 8 }}
       tolerations:
         - key: workload
           operator: Equal

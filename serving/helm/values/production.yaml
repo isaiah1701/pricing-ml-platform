@@ -17,16 +17,24 @@ monitoring:
   serviceMonitor:
     enabled: true
 
-replicaCount: 2
+replicaCount: 1
 
 autoscaling:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 6
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 1
   targetCPUUtilizationPercentage: 70
 
 nodeSelector:
-  workload: serving
+  workload: system
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 2Gi
 
 tolerations:
   - key: workload
@@ -43,10 +51,36 @@ platform:
   enabled: false
   awsRegion: eu-west-2
   mlflow:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
     databaseSecretArn: "REPLACE_WITH_MLFLOW_DATABASE_SECRET_ARN"
     databaseHost: "REPLACE_WITH_MLFLOW_DATABASE_HOST"
     artifactRoot: "s3://REPLACE_WITH_PLATFORM_DATA_BUCKET/mlflow"
   airflow:
+    parallelism: 1
+    nodeSelector:
+      workload: system
+    storageSize: 20Gi
+    componentResources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 4Gi
     databaseSecretArn: "REPLACE_WITH_AIRFLOW_DATABASE_SECRET_ARN"
     databaseHost: "REPLACE_WITH_AIRFLOW_DATABASE_HOST"
     dataBucket: "REPLACE_WITH_PLATFORM_DATA_BUCKET"

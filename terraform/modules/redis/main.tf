@@ -83,8 +83,8 @@ resource "aws_elasticache_replication_group" "this" {
   cluster_mode               = "enabled"
   num_node_groups            = var.num_node_groups
   replicas_per_node_group    = var.replicas_per_node_group
-  automatic_failover_enabled = true
-  multi_az_enabled           = true
+  automatic_failover_enabled = var.replicas_per_node_group > 0
+  multi_az_enabled           = var.replicas_per_node_group > 0
 
   at_rest_encryption_enabled = true
   transit_encryption_enabled = var.transit_encryption_enabled

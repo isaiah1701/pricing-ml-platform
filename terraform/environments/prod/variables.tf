@@ -4,6 +4,12 @@ variable "aws_region" {
   default     = "eu-west-2"
 }
 
+variable "cost_optimized" {
+  description = "Single-node learning deployment with single-AZ data services and one NAT gateway. Set false for the dedicated HA topology."
+  type        = bool
+  default     = true
+}
+
 variable "project_name" {
   description = "Short project identifier used in resource names."
   type        = string

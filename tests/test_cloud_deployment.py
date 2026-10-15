@@ -109,7 +109,7 @@ def test_airflow_runs_supervised_components_after_migrations(
         deployment["metadata"]["annotations"]["secret.reloader.stakater.com/reload"]
         == "airflow-database,airflow-runtime"
     )
-    assert pod["nodeSelector"] == {"workload": "training"}
+    assert pod["nodeSelector"] == {"workload": "system"}
     migration, data = pod["initContainers"]
     assert "airflow db migrate" in migration["args"][0]
     assert "airflow fab-db migrate" in migration["args"][0]

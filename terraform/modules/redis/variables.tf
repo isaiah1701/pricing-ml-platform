@@ -85,8 +85,8 @@ variable "replicas_per_node_group" {
   default     = 1
 
   validation {
-    condition     = var.replicas_per_node_group >= 1 && var.replicas_per_node_group <= 5
-    error_message = "replicas_per_node_group must be between 1 and 5."
+    condition     = var.replicas_per_node_group >= 0 && var.replicas_per_node_group <= 5
+    error_message = "replicas_per_node_group must be between 0 and 5; zero disables HA for learning deployments."
   }
 }
 

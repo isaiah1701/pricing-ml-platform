@@ -42,9 +42,7 @@ def rendered_resources() -> list[dict[str, Any]]:
     return [resource for resource in yaml.safe_load_all(completed.stdout) if resource]
 
 
-def _resource(
-    resources: list[dict[str, Any]], kind: str, name: str
-) -> dict[str, Any]:
+def _resource(resources: list[dict[str, Any]], kind: str, name: str) -> dict[str, Any]:
     """Return one rendered resource by Kubernetes kind and name."""
     for resource in resources:
         if resource.get("kind") == kind and resource["metadata"]["name"] == name:
@@ -62,7 +60,10 @@ def test_rollout_starts_small_and_passing_canary_reaches_full_traffic(
     assert weights == [5, 25, 50, 100]
     assert canary["stableService"] == "airbnb-inference"
     assert canary["canaryService"] == "airbnb-inference-canary"
-    assert canary["trafficRouting"]["traefik"]["weightedTraefikServiceName"] == "airbnb-inference"
+    assert (
+        canary["trafficRouting"]["traefik"]["weightedTraefikServiceName"]
+        == "airbnb-inference"
+    )
 
 
 def test_failed_analysis_aborts_without_retargeting_stable_service(
@@ -77,25 +78,26 @@ def test_failed_analysis_aborts_without_retargeting_stable_service(
         "prediction-p95-latency",
     }
     assert all(metric["failureLimit"] == 1 for metric in analysis["spec"]["metrics"])
-    assert all("result[0] <=" in metric["successCondition"] for metric in analysis["spec"]["metrics"])
+    assert all(
+        "result[0] <=" in metric["successCondition"]
+        for metric in analysis["spec"]["metrics"]
+    )
     stable = _resource(rendered_resources, "Service", "airbnb-inference")
     canary = _resource(rendered_resources, "Service", "airbnb-inference-canary")
     assert stable["spec"]["selector"] == canary["spec"]["selector"]
     assert stable["metadata"]["name"] != canary["metadata"]["name"]
 
 
-def test_hpa_targets_rollout_not_removed_deployment(
+def test_budget_rollout_uses_one_fixed_replica(
     rendered_resources: list[dict[str, Any]],
 ) -> None:
-    """Keep autoscaling attached to the progressive-delivery workload."""
-    hpa = _resource(
-        rendered_resources, "HorizontalPodAutoscaler", "airbnb-inference"
+    """Keep the shared-node learning deployment at one serving replica."""
+    LOGGER.info("Checking fixed serving capacity for the budget deployment")
+    rollout = _resource(rendered_resources, "Rollout", "airbnb-inference")
+    assert rollout["spec"]["replicas"] == 1
+    assert not any(
+        resource["kind"] == "HorizontalPodAutoscaler" for resource in rendered_resources
     )
-    assert hpa["spec"]["scaleTargetRef"] == {
-        "apiVersion": "argoproj.io/v1alpha1",
-        "kind": "Rollout",
-        "name": "airbnb-inference",
-    }
 
 
 def test_https_uses_cert_manager_secret_and_traefik(
@@ -109,13 +111,25 @@ def test_https_uses_cert_manager_secret_and_traefik(
     weighted = _resource(rendered_resources, "TraefikService", "airbnb-inference")
     assert certificate["spec"]["dnsNames"] == ["platf0rm.site"]
     assert route["spec"]["routes"][0]["match"] == "Host(`platf0rm.site`)"
-    bootstrap = yaml.safe_load((CHART_PATH / "values/bootstrap.yaml").read_text(encoding="utf-8"))
-    assert bootstrap["addons"]["externalDns"]["values"]["domainFilters"] == ["platf0rm.site"]
-    assert bootstrap["addons"]["traefik"]["values"]["service"]["annotations"]["external-dns.alpha.kubernetes.io/hostname"] == "platf0rm.site"
+    bootstrap = yaml.safe_load(
+        (CHART_PATH / "values/bootstrap.yaml").read_text(encoding="utf-8")
+    )
+    assert bootstrap["addons"]["externalDns"]["values"]["domainFilters"] == [
+        "platf0rm.site"
+    ]
+    assert (
+        bootstrap["addons"]["traefik"]["values"]["service"]["annotations"][
+            "external-dns.alpha.kubernetes.io/hostname"
+        ]
+        == "platf0rm.site"
+    )
     assert certificate["spec"]["issuerRef"]["name"] == issuer["metadata"]["name"]
     assert route["spec"]["tls"]["secretName"] == certificate["spec"]["secretName"]
-    assert issuer["spec"]["acme"]["solvers"][0]["http01"]["ingress"]["ingressClassName"] == "traefik"
+    assert (
+        issuer["spec"]["acme"]["solvers"][0]["http01"]["ingress"]["ingressClassName"]
+        == "traefik"
+    )
     assert route["spec"]["routes"][0]["services"][0]["kind"] == "TraefikService"
-    assert [service["name"] for service in weighted["spec"]["weighted"]["services"]] == [
-        "airbnb-inference", "airbnb-inference-canary"
-    ]
+    assert [
+        service["name"] for service in weighted["spec"]["weighted"]["services"]
+    ] == ["airbnb-inference", "airbnb-inference-canary"]

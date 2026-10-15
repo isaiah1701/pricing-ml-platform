@@ -3,6 +3,12 @@ variable "cluster_name" {
   type        = string
 }
 
+variable "shared_node_pool" {
+  description = "Use only the system pool for a small shared learning deployment."
+  type        = bool
+  default     = false
+}
+
 variable "kubernetes_version" {
   description = "EKS Kubernetes minor version."
   type        = string

@@ -13,7 +13,7 @@ locals {
     }
   }
 
-  managed_node_groups = {
+  dedicated_node_groups = {
     system = merge(local.node_group_defaults, {
       instance_types = var.system_node_pool.instance_types
       capacity_type  = var.system_node_pool.capacity_type
@@ -57,6 +57,22 @@ locals {
         }
       }
     })
+  }
+
+  managed_node_groups = {
+    for name, pool in local.dedicated_node_groups : name => merge(pool,
+      var.shared_node_pool ? {
+        subnet_ids = slice(var.private_subnet_ids, 0, 1)
+        cloudinit_pre_nodeadm = [{
+          content_type = "application/node.eks.aws"
+          content = yamlencode({
+            apiVersion = "node.eks.aws/v1alpha1"
+            kind       = "NodeConfig"
+            spec       = { kubelet = { config = { maxPods = 110 } } }
+          })
+        }]
+      } : { subnet_ids = var.private_subnet_ids, cloudinit_pre_nodeadm = [] }
+    ) if !var.shared_node_pool || name == "system"
   }
 }
 
@@ -102,7 +118,9 @@ module "eks" {
   }
 
   addons = {
-    coredns = {}
+    coredns = {
+      configuration_values = var.shared_node_pool ? jsonencode({ replicaCount = 1 }) : null
+    }
 
     eks-pod-identity-agent = {
       before_compute = true
@@ -112,10 +130,14 @@ module "eks" {
 
     vpc-cni = {
       before_compute = true
+      configuration_values = var.shared_node_pool ? jsonencode({
+        env = { ENABLE_PREFIX_DELEGATION = "true", WARM_PREFIX_TARGET = "1" }
+      }) : null
     }
 
     aws-ebs-csi-driver = {
       service_account_role_arn = aws_iam_role.ebs_csi_driver.arn
+      configuration_values     = var.shared_node_pool ? jsonencode({ controller = { replicaCount = 1 } }) : null
     }
   }
 
