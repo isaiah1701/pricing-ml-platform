@@ -24,7 +24,7 @@ it does not turn EKS into a free-tier service. Keep datasets and backups before
 tearing down a learning session.
 
 At AWS public on-demand London rates checked through the AWS Pricing API on
-2026-10-15, 730 hours/month is approximately $291 in baseline resources, or
+2026-10-15, 730 hours/month is approximately $287 in baseline resources, or
 roughly $300/month before tax and variable usage. This is not a billing cap:
 
 | Resource | Approximate USD/month |
@@ -35,7 +35,7 @@ roughly $300/month before tax and variable usage. This is not a billing cap:
 | Two db.t4g.micro PostgreSQL instances | 26.28 |
 | One cache.t4g.micro Redis node | 13.14 |
 | Network Load Balancer (hourly only) | 19.32 |
-| 93 GiB gp3 worker/PVC storage | 8.63 |
+| 53 GiB gp3 worker/PVC storage | 4.92 |
 | 40 GiB RDS gp3 storage | 5.32 |
 | Three public IPv4 addresses | 10.95 |
 | One Route 53 hosted zone | 0.50 |

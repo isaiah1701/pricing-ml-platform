@@ -127,7 +127,7 @@ module "eks" {
     min_size       = 1
     max_size       = 1
     desired_size   = 1
-    disk_size      = 60
+    disk_size      = 20
     capacity_type  = "ON_DEMAND"
   } : var.system_node_pool
   serving_node_pool               = var.serving_node_pool
