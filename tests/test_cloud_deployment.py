@@ -127,6 +127,14 @@ def test_airflow_runs_supervised_components_after_migrations(
     arguments = mlflow["spec"]["template"]["spec"]["containers"][0]["args"]
     assert mlflow["spec"]["strategy"] == {"type": "Recreate", "rollingUpdate": None}
     assert arguments[arguments.index("--workers") + 1] == "1"
+    environment = {
+        item["name"]: item.get("value")
+        for item in mlflow["spec"]["template"]["spec"]["containers"][0]["env"]
+    }
+    assert environment["AWS_DEFAULT_REGION"] == environment["AWS_REGION"] == "eu-west-2"
+    assert len(environment) == len(
+        mlflow["spec"]["template"]["spec"]["containers"][0]["env"]
+    )
     assert (
         mlflow["spec"]["template"]["spec"]["containers"][0]["startupProbe"][
             "failureThreshold"
