@@ -13,6 +13,8 @@ data:
   MLFLOW_TRACING_EXPERIMENT_ID: {{ required "mlflow.tracing.experimentId is required" .Values.mlflow.tracing.experimentId | quote }}
   OTEL_SERVICE_NAME: {{ required "mlflow.tracing.serviceName is required" .Values.mlflow.tracing.serviceName | quote }}
   DEPLOYMENT_ENVIRONMENT: {{ required "mlflow.tracing.environment is required" .Values.mlflow.tracing.environment | quote }}
+  PRODUCTION_EVENTS_BUCKET: {{ .Values.monitoring.productionEvents.bucket | quote }}
+  PRODUCTION_EVENTS_PREFIX: {{ .Values.monitoring.productionEvents.prefix | quote }}
   MAX_CONCURRENT_PREDICTIONS: {{ .Values.runtime.maxConcurrentPredictions | quote }}
   PREDICTION_QUEUE_TIMEOUT_SECONDS: {{ .Values.runtime.predictionQueueTimeoutSeconds | quote }}
   OMP_NUM_THREADS: {{ .Values.runtime.nativeThreads | quote }}

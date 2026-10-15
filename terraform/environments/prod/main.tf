@@ -71,6 +71,10 @@ locals {
       namespace       = var.inference_namespace
       service_account = var.inference_service_account
     }
+    alertmanager = {
+      namespace       = "monitoring"
+      service_account = "kube-prometheus-stack-alertmanager"
+    }
     mlflow = {
       namespace       = var.mlflow_namespace
       service_account = var.mlflow_service_account
@@ -152,6 +156,62 @@ module "platform_data" {
   object_lock_enabled                = true
   object_lock_retention_days         = var.artifact_retention_days
   tags                               = local.common_tags
+}
+
+resource "aws_s3_object" "recovery_manifest" {
+  bucket       = module.platform_data.bucket_name
+  key          = "recovery/platform-manifest.json"
+  content_type = "application/json"
+  content = jsonencode({
+    schema_version = 1
+    environment    = local.environment
+    required_prefixes = {
+      raw_training_data  = "data/"
+      feature_snapshots  = "snapshots/"
+      mlflow_artifacts   = "${trimsuffix(var.mlflow_artifact_prefix, "/")}/"
+      prediction_events  = "production/events/"
+      monitoring_reports = "monitoring/"
+    }
+    external_recovery_dependencies = [
+      "terraform state in the bootstrap S3 bucket",
+      "MLflow and Airflow RDS snapshots",
+      "Secrets Manager secrets",
+      "immutable ECR image tags",
+      "the Git repository",
+    ]
+  })
+
+  server_side_encryption = "AES256"
+  depends_on             = [module.platform_data]
+}
+
+resource "aws_sns_topic" "platform_alerts" {
+  name              = "${local.name}-alerts"
+  kms_master_key_id = "alias/aws/sns"
+  tags              = local.common_tags
+}
+
+resource "aws_sns_topic_subscription" "alert_email" {
+  count = var.alert_notification_email == null ? 0 : 1
+
+  topic_arn = aws_sns_topic.platform_alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_notification_email
+}
+
+data "aws_iam_policy_document" "alertmanager_notifications" {
+  statement {
+    sid       = "PublishPlatformAlerts"
+    effect    = "Allow"
+    actions   = ["sns:Publish"]
+    resources = [aws_sns_topic.platform_alerts.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "alertmanager_notifications" {
+  name   = "publish-platform-alerts"
+  role   = aws_iam_role.pod_identity["alertmanager"].id
+  policy = data.aws_iam_policy_document.alertmanager_notifications.json
 }
 
 resource "aws_security_group" "postgresql" {
@@ -312,6 +372,13 @@ data "aws_iam_policy_document" "inference_artifacts" {
     actions   = ["s3:GetObject", "s3:GetObjectVersion"]
     resources = ["${module.platform_data.bucket_arn}/${trimsuffix(var.mlflow_artifact_prefix, "/")}/*"]
   }
+
+  statement {
+    sid       = "WriteProductionPredictionEvents"
+    effect    = "Allow"
+    actions   = ["s3:PutObject"]
+    resources = ["${module.platform_data.bucket_arn}/production/events/*"]
+  }
 }
 
 resource "aws_iam_role_policy" "inference_artifacts" {
@@ -370,6 +437,7 @@ data "aws_iam_policy_document" "airflow_data" {
     resources = [
       "${module.platform_data.bucket_arn}/data/*",
       "${module.platform_data.bucket_arn}/monitoring/*",
+      "${module.platform_data.bucket_arn}/production/*",
       "${module.platform_data.bucket_arn}/snapshots/*",
     ]
   }

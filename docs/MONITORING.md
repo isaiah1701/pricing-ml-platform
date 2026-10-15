@@ -3,8 +3,11 @@
 ## Run a drift check
 
 The reference dataset is the validated training feature artifact. The production
-dataset must contain the monitored feature columns and a `prediction` column.
-By default, the last 10,000 production rows form the current window.
+window is rebuilt from immutable prediction events under the private
+`production/events/date=YYYY-MM-DD/hour=HH/` S3 prefix. Each event contains the
+validated model features, prediction, concrete model version, prediction ID,
+and timestamp, but no user identity or credentials. By default, the newest
+10,000 events form the current window.
 
 ```sh
 uv run python -m monitoring.drift_check \
@@ -24,6 +27,8 @@ the monitored column lists are configurable from the CLI.
 Each successful run writes timestamped JSON and interactive HTML reports. The
 JSON summary records the UTC timestamp, concrete model version, input paths,
 window size, per-feature scores, prediction state, and aggregate state.
+Airflow uploads both reports to `monitoring/drift/<timestamp>/` in the platform
+bucket so they survive pod and cluster replacement.
 
 ## Prometheus integration
 
@@ -84,6 +89,9 @@ which Prometheus scrapes as the `node-exporter` job.
 Install [airbnb-alerts.yml](../monitoring/prometheus/airbnb-alerts.yml) in
 Prometheus and configure Alertmanager routing. Every alert links to a
 version-controlled entry in [the runbook index](runbooks/README.md).
+Production Alertmanager publishes firing and resolved alerts to the encrypted
+SNS topic created by Terraform. Set `alert_notification_email` (or add another
+SNS subscription) and confirm the AWS subscription before expecting delivery.
 
 ## Airflow and retraining events
 
@@ -95,6 +103,10 @@ an atomic `airbnb.model.retraining.requested` JSON event under
 
 The event records the exact production path/window, model version, drift share,
 and report path so a downstream retraining consumer can reproduce the trigger.
+
+Serving exports `airbnb_prediction_events_total{outcome}`. Sustained S3 write
+failures fire `AirbnbPredictionEventPersistenceFailing`; stale monitoring also
+catches missing or broken daily compaction.
 
 ## Grafana
 

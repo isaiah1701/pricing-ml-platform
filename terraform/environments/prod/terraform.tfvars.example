@@ -4,6 +4,7 @@ platform_admin_principal_arn = "arn:aws:iam::655916164714:user/isaiahOct26"
 
 domain_name                  = "platf0rm.site"
 application_hostname          = "platf0rm.site"
+alert_notification_email      = "replace-me@example.com"
 create_route53_hosted_zone    = true
 route53_hosted_zone_id        = null
 

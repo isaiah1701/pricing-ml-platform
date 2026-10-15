@@ -10,6 +10,25 @@ placeholders.
 - `terraform/modules/route-53` creates or reuses the `platf0rm.site` hosted zone. ExternalDNS owns the apex NLB record; Kubernetes cert-manager issues and renews the HTTPS certificate used by Traefik.
 - `terraform/modules/rds`, `terraform/modules/redis`, and `terraform/modules/s3` provide separate MLflow/Airflow PostgreSQL stores, the Feast online store, and Object-Locked platform artifacts.
 
+## Rebuild inventory
+
+Destroying EKS is safe only when the durable control and data planes remain.
+The separate bootstrap S3 bucket retains Terraform state. The Object-Locked
+platform bucket retains these rebuild inputs:
+
+- `data/`: original source datasets needed to recreate transformations;
+- `snapshots/`: immutable feature snapshots and lineage documents;
+- `mlflow/`: model artifacts (the MLflow registry metadata remains in RDS);
+- `production/events/`: immutable prediction events used for drift windows;
+- `monitoring/`: persisted drift and model-quality reports; and
+- `recovery/platform-manifest.json`: the non-secret inventory and expected prefixes.
+
+Git remains the source for Terraform, Helm, Airflow DAGs, and dashboards; ECR
+retains immutable serving/training images; Secrets Manager retains credentials.
+Restore MLflow and Airflow metadata from RDS snapshots before bootstrapping the
+applications. Redis is derived state and is repopulated from the immutable
+feature snapshot. Do not treat S3 model artifacts alone as a registry backup.
+
 ## Node-pool contract
 
 The `system` pool hosts EKS add-ons. The `serving` and `training` pools are deliberately separate and tainted. A serving Deployment must select `workload=serving` and tolerate `workload=serving:NoSchedule`; a training Job must use the equivalent `training` selector and toleration. This prevents scheduled retraining workloads from consuming serving capacity.

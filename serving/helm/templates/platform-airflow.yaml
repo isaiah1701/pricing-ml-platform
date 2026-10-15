@@ -62,6 +62,7 @@ data:
   AIRBNB_TRAINING_WORK_DIR: /opt/airflow/training-work
   DRIFT_REFERENCE_PATH: /opt/airflow/work/listing_features.parquet
   DRIFT_PRODUCTION_PATH: /opt/airflow/input/production_features.parquet
+  PRODUCTION_EVENTS_PREFIX: production/events
   DRIFT_REPORT_DIR: /opt/airflow/reports
   DRIFT_PROMETHEUS_METRICS_PATH: /opt/airflow/monitoring-metrics/drift.prom
   RETRAINING_EVENT_DIR: /opt/airflow/retraining-events

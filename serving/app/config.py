@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     deployment_environment: str = Field(
         default="development", validation_alias="DEPLOYMENT_ENVIRONMENT"
     )
+    production_events_bucket: str = Field(
+        default="", validation_alias="PRODUCTION_EVENTS_BUCKET"
+    )
+    production_events_prefix: str = Field(
+        default="production/events", validation_alias="PRODUCTION_EVENTS_PREFIX"
+    )
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
 
     @field_validator(
@@ -51,6 +57,7 @@ class Settings(BaseSettings):
         "tracing_experiment_id",
         "otel_service_name",
         "deployment_environment",
+        "production_events_prefix",
         "log_level",
         mode="before",
     )

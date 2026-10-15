@@ -28,6 +28,18 @@ variable "application_hostname" {
   default     = "platf0rm.site"
 }
 
+variable "alert_notification_email" {
+  description = "Optional email endpoint subscribed to production Alertmanager notifications through SNS. AWS requires confirmation."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.alert_notification_email == null || can(regex("^[^@]+@[^@]+\\.[^@]+$", var.alert_notification_email))
+    error_message = "alert_notification_email must be a valid email address when set."
+  }
+}
+
 variable "create_route53_hosted_zone" {
   description = "Create the public hosted zone in this account. Set false when supplying an existing zone ID."
   type        = bool

@@ -24,6 +24,7 @@ def test_render_values_updates_workload_and_controller_coordinates(
                 "image": {"repository": "old"},
                 "trainingImage": {"repository": "old"},
                 "ingress": {"host": "old.example"},
+                "monitoring": {"productionEvents": {"bucket": "old"}},
                 "platform": {
                     "awsRegion": "old",
                     "mlflow": {"databaseSecretArn": "old", "artifactRoot": "old"},
@@ -41,6 +42,25 @@ def test_render_values_updates_workload_and_controller_coordinates(
         yaml.safe_dump(
             {
                 "addons": {
+                    "monitoring": {
+                        "values": {
+                            "alertmanager": {
+                                "config": {
+                                    "receivers": [
+                                        {
+                                            "name": "platform-sns",
+                                            "sns_configs": [
+                                                {
+                                                    "topic_arn": "old",
+                                                    "sigv4": {"region": "old"},
+                                                }
+                                            ],
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    },
                     "traefik": {"values": {"service": {"annotations": {}}}},
                     "awsLoadBalancerController": {
                         "values": {"clusterName": "old", "region": "old"}
@@ -67,6 +87,7 @@ def test_render_values_updates_workload_and_controller_coordinates(
         "mlflow_database_port": "5432",
         "mlflow_database_name": "mlflow",
         "airflow_database_secret_arn": "arn:airflow",
+        "alert_topic_arn": "arn:aws:sns:eu-west-2:123:alerts",
         "application_hostname": "prices.example.com",
         "aws_region": "eu-west-2",
         "cluster_name": "prod-mlops-prod",
@@ -87,6 +108,7 @@ def test_render_values_updates_workload_and_controller_coordinates(
     assert production["image"]["repository"] == "registry/serving"
     assert production["platform"]["mlflow"]["databaseSecretArn"] == "arn:mlflow"
     assert production["platform"]["airflow"]["dataBucket"] == "platform"
+    assert production["monitoring"]["productionEvents"]["bucket"] == "platform"
     assert production["platform"]["airflow"]["redisType"] == "redis"
     assert production["platform"]["mlflow"]["databaseHost"] == "mlflow.internal"
     assert production["platform"]["airflow"]["databaseName"] == "airflow"
@@ -99,3 +121,10 @@ def test_render_values_updates_workload_and_controller_coordinates(
     assert bootstrap["addons"]["externalDns"]["values"]["domainFilters"] == [
         "example.com"
     ]
+    sns_config = bootstrap["addons"]["monitoring"]["values"]["alertmanager"][
+        "config"
+    ]["receivers"][0]["sns_configs"][0]
+    assert sns_config == {
+        "topic_arn": "arn:aws:sns:eu-west-2:123:alerts",
+        "sigv4": {"region": "eu-west-2"},
+    }

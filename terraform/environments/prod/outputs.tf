@@ -38,6 +38,11 @@ output "platform_data_bucket" {
   value       = module.platform_data.bucket_name
 }
 
+output "platform_alert_topic_arn" {
+  description = "SNS topic receiving Alertmanager notifications."
+  value       = aws_sns_topic.platform_alerts.arn
+}
+
 output "mlflow_database_secret_arn" {
   description = "RDS-managed credential secret consumed through External Secrets Operator."
   value       = module.mlflow_database.master_user_secret_arn
@@ -73,6 +78,7 @@ output "deployment_coordinates" {
     airflow_database_port       = tostring(module.airflow_database.port)
     airflow_database_name       = module.airflow_database.database_name
     application_hostname        = var.application_hostname
+    alert_topic_arn             = aws_sns_topic.platform_alerts.arn
     cluster_name                = module.eks.cluster_name
     domain_name                 = var.domain_name
     mlflow_artifact_root        = "s3://${module.platform_data.bucket_name}/${trimsuffix(var.mlflow_artifact_prefix, "/")}"

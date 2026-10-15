@@ -9,9 +9,11 @@ continue, but model-quality regressions can go undetected.
 ## Diagnosis
 
 1. Check the latest `airbnb_drift_monitoring` Airflow run and task logs.
-2. Confirm the reference and production paths exist and contain the configured columns.
-3. Check Evidently dependency/import errors and write access to report and metrics paths.
-4. Confirm the Prometheus textfile collector is scraping the generated `drift.prom` file.
+2. Verify new objects exist under `production/events/date=.../hour=.../` and
+   inspect `airbnb_prediction_events_total{outcome="failed"}`.
+3. Confirm the reference and compacted production paths contain the configured columns.
+4. Check Evidently dependency/import errors and S3/report write permissions.
+5. Confirm Pushgateway is exposing the generated drift metrics.
 
 ## Mitigation
 

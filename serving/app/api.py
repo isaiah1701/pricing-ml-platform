@@ -37,6 +37,10 @@ from serving.app.model_loader import (
     load_champion_model,
     refresh_champion_model,
 )
+from serving.app.prediction_events import (
+    PredictionEventRecorder,
+    create_prediction_event_recorder,
+)
 from serving.app.schemas import (
     MODEL_FEATURE_COLUMNS,
     HealthResponse,
@@ -94,6 +98,7 @@ class ServingMetrics:
     predicted_price: Histogram
     prediction_inflight: Gauge
     prediction_rejected: Counter
+    prediction_events: Counter
 
 
 def _create_metrics() -> ServingMetrics:
@@ -148,6 +153,12 @@ def _create_metrics() -> ServingMetrics:
             "Predictions rejected after the bounded execution queue filled.",
             registry=registry,
         ),
+        prediction_events=Counter(
+            "airbnb_prediction_events_total",
+            "Prediction event persistence attempts by outcome.",
+            ("outcome",),
+            registry=registry,
+        ),
     )
 
 
@@ -168,10 +179,16 @@ def create_app(
     model_loader: ModelLoader = load_champion_model,
     model_refresher: ModelRefresher = refresh_champion_model,
     trace_exporter: SpanExporter | None = None,
+    event_recorder: PredictionEventRecorder | None = None,
 ) -> FastAPI:
     """Create an instrumented application with safe periodic model refresh."""
     runtime_settings = settings or get_settings()
     metrics = _create_metrics()
+    runtime_event_recorder = (
+        event_recorder
+        if event_recorder is not None
+        else create_prediction_event_recorder(runtime_settings)
+    )
     prediction_slots = asyncio.Semaphore(
         runtime_settings.max_concurrent_predictions
     )
@@ -417,8 +434,34 @@ def create_app(
             metrics.prediction_latency.observe(time.perf_counter() - started_at)
         metrics.predicted_price.observe(predicted_price)
         prediction_id = str(uuid4())
-        prediction_timestamp = datetime.now(timezone.utc).isoformat()
+        prediction_datetime = datetime.now(timezone.utc)
+        prediction_timestamp = prediction_datetime.isoformat()
         trace_id = _trace_id(root_span)
+        event_persisted = runtime_event_recorder is None
+        if runtime_event_recorder is not None:
+            with tracer.start_as_current_span("prediction.persist") as persist_span:
+                persist_span.set_attribute("storage.system", "aws.s3")
+                try:
+                    event_key = await asyncio.to_thread(
+                        runtime_event_recorder.record,
+                        listing,
+                        prediction_id=prediction_id,
+                        prediction_timestamp=prediction_datetime,
+                        predicted_price=predicted_price,
+                        model_version=loaded.version,
+                    )
+                    persist_span.set_attribute("storage.key", event_key)
+                    persist_span.set_status(Status(StatusCode.OK))
+                    metrics.prediction_events.labels("persisted").inc()
+                    event_persisted = True
+                except Exception:
+                    persist_span.set_status(
+                        Status(StatusCode.ERROR, "Prediction event persistence failed")
+                    )
+                    metrics.prediction_events.labels("failed").inc()
+                    LOGGER.exception(
+                        "Prediction event persistence failed for %s", prediction_id
+                    )
         _set_span_json(
             root_span,
             "mlflow.spanOutputs",
@@ -426,8 +469,10 @@ def create_app(
                 "model_version": loaded.version,
                 "predicted_price": round(predicted_price, 2),
                 "prediction_id": prediction_id,
+                "monitoring_event_persisted": event_persisted,
             },
         )
+        root_span.set_attribute("monitoring.event_persisted", event_persisted)
         root_span.set_attribute("app.prediction.id", prediction_id)
         root_span.set_status(Status(StatusCode.OK))
         if trace_id is not None:

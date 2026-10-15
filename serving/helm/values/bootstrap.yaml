@@ -234,6 +234,22 @@ addons:
                     storage: 10Gi
       alertmanager:
         enabled: true
+        config:
+          global:
+            resolve_timeout: 5m
+          route:
+            receiver: platform-sns
+            group_by: [alertname, service, severity]
+            group_wait: 30s
+            group_interval: 5m
+            repeat_interval: 4h
+          receivers:
+            - name: platform-sns
+              sns_configs:
+                - topic_arn: arn:aws:sns:eu-west-2:000000000000:replace-me
+                  send_resolved: true
+                  sigv4:
+                    region: eu-west-2
         alertmanagerSpec:
           resources:
             requests:

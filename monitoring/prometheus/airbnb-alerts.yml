@@ -12,6 +12,15 @@ groups:
         annotations:
           summary: Airbnb drift monitoring has not completed in 26 hours
           runbook_url: docs/runbooks/drift-monitoring-stale.md
+      - alert: AirbnbPredictionEventPersistenceFailing
+        expr: sum(rate(airbnb_prediction_events_total{outcome="failed"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+          service: airbnb-price-predictor
+        annotations:
+          summary: Prediction events are not reaching the production drift window
+          runbook_url: docs/runbooks/drift-monitoring-stale.md
 
       - alert: AirbnbFeatureDriftDetected
         expr: max by (feature, kind, model_version) (airbnb_feature_drift_score) > 0.2

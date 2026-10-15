@@ -32,13 +32,19 @@ def test_monitoring_dag_is_scheduled_and_thresholded() -> None:
     assert dag.dag_id == "airbnb_drift_monitoring"
     assert str(dag.schedule) == "0 3 * * *"
     assert set(dag.task_ids) == {
+        "prepare_production_window",
         "execute_drift_check",
+        "publish_drift_artifacts",
         "drift_threshold_gate",
         "emit_retraining_event",
         "no_retraining_needed",
     }
+    assert dag.task_dict["execute_drift_check"].upstream_task_ids == {
+        "prepare_production_window"
+    }
     assert dag.task_dict["drift_threshold_gate"].upstream_task_ids == {
-        "execute_drift_check"
+        "execute_drift_check",
+        "publish_drift_artifacts",
     }
     assert dag.task_dict["emit_retraining_event"].upstream_task_ids == {
         "execute_drift_check",

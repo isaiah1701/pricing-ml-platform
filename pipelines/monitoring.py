@@ -10,9 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypedDict
 
+import boto3
 from airflow.sdk import DAG, Asset, dag, task
 
 from monitoring.drift_check import DriftResult, run_drift_check
+from monitoring.production_events import materialize_production_window
 
 LOGGER = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +44,8 @@ RETRAINING_SHARE_THRESHOLD = float(
     os.getenv("DRIFT_RETRAINING_SHARE_THRESHOLD", "0.5")
 )
 MODEL_VERSION = os.getenv("MODEL_VERSION", "unknown")
+PLATFORM_DATA_BUCKET = os.getenv("PLATFORM_DATA_BUCKET", "")
+PRODUCTION_EVENTS_PREFIX = os.getenv("PRODUCTION_EVENTS_PREFIX", "production/events")
 RETRAINING_EVENT_ASSET = Asset("airbnb_retraining_event")
 
 
@@ -59,11 +63,24 @@ class RetrainingEvent(TypedDict):
 
 
 @task(retries=1)
-def execute_drift_check() -> DriftResult:
+def prepare_production_window() -> str:
+    """Materialize the latest S3 prediction events for Evidently."""
+    return str(
+        materialize_production_window(
+            PLATFORM_DATA_BUCKET,
+            PRODUCTION_EVENTS_PREFIX,
+            PRODUCTION_PATH,
+            window_rows=PRODUCTION_WINDOW_ROWS,
+        )
+    )
+
+
+@task(retries=1)
+def execute_drift_check(production_path: str) -> DriftResult:
     """Run the configured production-window drift comparison."""
     return run_drift_check(
         REFERENCE_PATH,
-        PRODUCTION_PATH,
+        production_path,
         REPORT_DIR,
         METRICS_PATH,
         production_window_rows=PRODUCTION_WINDOW_ROWS,
@@ -84,6 +101,27 @@ def drift_threshold_gate(result: DriftResult) -> str:
         )
         return "emit_retraining_event"
     return "no_retraining_needed"
+
+
+@task(retries=1)
+def publish_drift_artifacts(result: DriftResult) -> str:
+    """Persist the reproducible Evidently report pair in the platform bucket."""
+    client = boto3.client("s3")
+    timestamp = str(result["timestamp"]).replace(":", "-")
+    report_prefix = f"monitoring/drift/{timestamp}"
+    for result_key, extension, content_type in (
+        ("json_report_path", "json", "application/json"),
+        ("html_report_path", "html", "text/html"),
+    ):
+        source = Path(str(result[result_key]))
+        client.upload_file(
+            str(source),
+            PLATFORM_DATA_BUCKET,
+            f"{report_prefix}/report.{extension}",
+            ExtraArgs={"ContentType": content_type, "ServerSideEncryption": "AES256"},
+        )
+    LOGGER.info("Published drift artifacts to s3://%s/%s", PLATFORM_DATA_BUCKET, report_prefix)
+    return f"s3://{PLATFORM_DATA_BUCKET}/{report_prefix}"
 
 
 @task(retries=1, outlets=[RETRAINING_EVENT_ASSET])
@@ -139,10 +177,13 @@ def no_retraining_needed(result: DriftResult) -> None:
 )
 def monitoring_pipeline() -> None:
     """Define daily drift monitoring and conditional event publication."""
-    result = execute_drift_check()
+    production_path = prepare_production_window()
+    result = execute_drift_check(production_path)
+    published = publish_drift_artifacts(result)  # type: ignore[arg-type]
     branch = drift_threshold_gate(result)  # type: ignore[arg-type]
     emitted = emit_retraining_event(result)  # type: ignore[arg-type]
     unchanged = no_retraining_needed(result)  # type: ignore[arg-type]
+    published >> branch
     branch >> [emitted, unchanged]
 
 

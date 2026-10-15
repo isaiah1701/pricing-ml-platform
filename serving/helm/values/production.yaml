@@ -10,6 +10,9 @@ ingress:
   className: traefik
   host: platf0rm.site
 monitoring:
+  productionEvents:
+    bucket: prod-mlops-prod-655916164714-data
+    prefix: production/events
   serviceMonitor:
     enabled: true
 replicaCount: 1

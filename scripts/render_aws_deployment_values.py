@@ -38,6 +38,7 @@ REQUIRED_COORDINATES: frozenset[str] = frozenset(
         "airflow_database_host",
         "airflow_database_port",
         "airflow_database_name",
+        "alert_topic_arn",
         "mlflow_database_host",
         "mlflow_database_port",
         "mlflow_database_name",
@@ -135,6 +136,9 @@ def render_values(
     production["platform"]["airflow"]["dataBucket"] = coordinates[
         "platform_data_bucket"
     ]
+    production["monitoring"]["productionEvents"]["bucket"] = coordinates[
+        "platform_data_bucket"
+    ]
     production["platform"]["airflow"]["redisConnectionString"] = coordinates[
         "redis_connection_string"
     ]
@@ -157,6 +161,11 @@ def render_values(
     addons["clusterAutoscaler"]["values"]["awsRegion"] = coordinates["aws_region"]
     addons["externalDns"]["values"]["domainFilters"] = [coordinates["domain_name"]]
     addons["externalDns"]["values"]["txtOwnerId"] = coordinates["cluster_name"]
+    sns_config = addons["monitoring"]["values"]["alertmanager"]["config"][
+        "receivers"
+    ][0]["sns_configs"][0]
+    sns_config["topic_arn"] = coordinates["alert_topic_arn"]
+    sns_config["sigv4"]["region"] = coordinates["aws_region"]
 
     _write_yaml(production_values_path, production)
     _write_yaml(bootstrap_values_path, bootstrap)

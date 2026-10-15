@@ -36,6 +36,9 @@ ingress:
   acmeServer: https://acme-v02.api.letsencrypt.org/directory
 
 monitoring:
+  productionEvents:
+    bucket: ""
+    prefix: production/events
   serviceMonitor:
     enabled: false
     prometheusRelease: kube-prometheus-stack
