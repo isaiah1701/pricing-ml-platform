@@ -2,6 +2,11 @@ name: Publish immutable images and propose GitOps promotion
 
 on:
   workflow_dispatch:
+    inputs:
+      create_promotion_pr:
+        description: Open a promotion PR after publishing (disable for an operator-managed launch)
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -106,6 +111,7 @@ jobs:
           python scripts/validate_aws_deployment.py --check-images
 
       - name: Open GitOps image promotion pull request
+        if: ${{ inputs.create_promotion_pr }}
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
