@@ -1,10 +1,10 @@
 image:
   repository: 655916164714.dkr.ecr.eu-west-2.amazonaws.com/prod-mlops-prod-serving
-  tag: sha-REPLACE_WITH_GIT_SHA
+  tag: sha-a16348877316be1e2fe8510a96d20dd1a3a9739a
   pullPolicy: IfNotPresent
 trainingImage:
   repository: 655916164714.dkr.ecr.eu-west-2.amazonaws.com/prod-mlops-prod-training
-  tag: sha-REPLACE_WITH_GIT_SHA
+  tag: sha-a16348877316be1e2fe8510a96d20dd1a3a9739a
 ingress:
   enabled: true
   className: traefik
