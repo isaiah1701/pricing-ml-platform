@@ -141,6 +141,12 @@ GitOps promotion` manually from GitHub Actions. It scans both images, pushes onl
 the Terraform-created ECR repositories, and opens a promotion pull request.
 Merge that pull request only after CI succeeds.
 
+If repository policy disallows Actions-created pull requests, dispatch with
+`create_promotion_pr=false`. This still builds, runtime-checks, scans, and publishes
+the images. An operator then updates the immutable Helm image coordinates, runs
+the launch preflight below, and commits the reviewed promotion. No repository
+permission weakening or automatic Kubernetes deployment is required.
+
 The publishing workflow checks the complete values file and verifies both tags
 in ECR before creating the promotion PR. Run the same launch preflight locally:
 
