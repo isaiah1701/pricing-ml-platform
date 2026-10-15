@@ -75,6 +75,7 @@ def test_render_values_updates_workload_and_controller_coordinates(
         "mlflow_database_secret_arn": "arn:mlflow",
         "platform_data_bucket": "platform",
         "redis_connection_string": "redis:6379,ssl=true",
+        "redis_type": "redis",
         "serving_repository": "registry/serving",
         "training_repository": "registry/training",
     }
@@ -86,6 +87,7 @@ def test_render_values_updates_workload_and_controller_coordinates(
     assert production["image"]["repository"] == "registry/serving"
     assert production["platform"]["mlflow"]["databaseSecretArn"] == "arn:mlflow"
     assert production["platform"]["airflow"]["dataBucket"] == "platform"
+    assert production["platform"]["airflow"]["redisType"] == "redis"
     assert production["platform"]["mlflow"]["databaseHost"] == "mlflow.internal"
     assert production["platform"]["airflow"]["databaseName"] == "airflow"
     assert (

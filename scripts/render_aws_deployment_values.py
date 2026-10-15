@@ -138,6 +138,9 @@ def render_values(
     production["platform"]["airflow"]["redisConnectionString"] = coordinates[
         "redis_connection_string"
     ]
+    production["platform"]["airflow"]["redisType"] = coordinates.get(
+        "redis_type", "redis_cluster"
+    )
 
     bootstrap = _load_yaml(bootstrap_values_path)
     addons = bootstrap["addons"]

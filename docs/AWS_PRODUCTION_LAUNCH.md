@@ -111,7 +111,8 @@ writes database passwords.
 The renderer obtains each database's host, port, and name from Terraform outputs;
 External Secrets reads only `username` and `password` from RDS-managed secrets.
 Database connections require TLS. Feast uses the AWS-specific
-`feature_store.aws.yaml`, which selects `redis_cluster` and the Feast connection
+`feature_store.aws.yaml`, which selects the Terraform-rendered `REDIS_TYPE`
+(`redis` for the budget standalone node, `redis_cluster` otherwise) and the Feast connection
 format `endpoint:6379,ssl=true` (not a Redis URL).
 
 External Secrets refreshes database credentials every five minutes. Reloader

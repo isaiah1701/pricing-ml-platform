@@ -17,6 +17,11 @@ resource "aws_elasticache_parameter_group" "this" {
   description = "Redis parameters for ${var.replication_group_id}"
   family      = var.parameter_group_family
 
+  parameter {
+    name  = "cluster-enabled"
+    value = var.replicas_per_node_group > 0 ? "yes" : "no"
+  }
+
   dynamic "parameter" {
     for_each = var.parameters
 
@@ -71,18 +76,18 @@ resource "aws_vpc_security_group_ingress_rule" "security_group" {
 
 resource "aws_elasticache_replication_group" "this" {
   replication_group_id = var.replication_group_id
-  description          = "Multi-AZ Redis cluster for ${var.replication_group_id}"
+  description          = "Redis feature store for ${var.replication_group_id}"
 
   engine         = "redis"
   engine_version = var.engine_version
   node_type      = var.node_type
   port           = var.port
 
-  # A single shard with one replica is the cheapest cluster-mode topology that
-  # provides automatic failover in another Availability Zone.
-  cluster_mode               = "enabled"
-  num_node_groups            = var.num_node_groups
-  replicas_per_node_group    = var.replicas_per_node_group
+  # A budget deployment uses one shard without a replica or failover.
+  cluster_mode               = var.replicas_per_node_group > 0 ? "enabled" : "disabled"
+  num_node_groups            = var.replicas_per_node_group > 0 ? var.num_node_groups : null
+  replicas_per_node_group    = var.replicas_per_node_group > 0 ? var.replicas_per_node_group : null
+  num_cache_clusters         = var.replicas_per_node_group == 0 ? 1 : null
   automatic_failover_enabled = var.replicas_per_node_group > 0
   multi_az_enabled           = var.replicas_per_node_group > 0
 

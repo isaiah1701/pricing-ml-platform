@@ -77,6 +77,7 @@ output "deployment_coordinates" {
     mlflow_database_name        = module.mlflow_database.database_name
     platform_data_bucket        = module.platform_data.bucket_name
     redis_connection_string     = "${module.redis.configuration_endpoint_address}:${module.redis.port},ssl=true"
+    redis_type                  = var.cost_optimized ? "redis" : "redis_cluster"
     serving_repository          = module.ecr["serving"].repository_url
     training_repository         = module.ecr["training"].repository_url
   }

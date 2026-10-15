@@ -157,12 +157,15 @@ def test_airflow_runs_supervised_components_after_migrations(
     } <= keys.keys()
 
 
+@pytest.mark.parametrize("redis_type", ["redis", "redis_cluster"])
 def test_aws_feast_configuration_selects_cluster_and_tls(
     monkeypatch: pytest.MonkeyPatch,
+    redis_type: str,
 ) -> None:
-    """Exercise Feast's actual parser and RedisCluster constructor offline."""
+    """Exercise Feast's standalone and cluster TLS client constructors offline."""
     LOGGER.info("Checking AWS Feast configuration against the locked client")
     monkeypatch.setenv("REDIS_CONNECTION_STRING", "cache.internal:6379,ssl=true")
+    monkeypatch.setenv("REDIS_TYPE", redis_type)
     config = load_repo_config(
         PROJECT_ROOT / "feature_repo",
         PROJECT_ROOT / "feature_repo/feature_store.aws.yaml",
@@ -170,18 +173,24 @@ def test_aws_feast_configuration_selects_cluster_and_tls(
     assert isinstance(config.online_store, RedisOnlineStoreConfig)
     client = Mock()
     constructor = Mock(return_value=client)
-    monkeypatch.setattr("feast.infra.online_stores.redis.RedisCluster", constructor)
+    client_class = "RedisCluster" if redis_type == "redis_cluster" else "Redis"
+    monkeypatch.setattr(f"feast.infra.online_stores.redis.{client_class}", constructor)
     assert RedisOnlineStore()._get_client(config.online_store) is client
     options = constructor.call_args.kwargs
     assert options["ssl"] is True
-    assert options["startup_nodes"][0].host == "cache.internal"
-    assert int(options["startup_nodes"][0].port) == 6379
+    if redis_type == "redis_cluster":
+        assert options["startup_nodes"][0].host == "cache.internal"
+        assert int(options["startup_nodes"][0].port) == 6379
+    else:
+        assert options["host"] == "cache.internal"
+        assert int(options["port"]) == 6379
 
 
 def test_preflight_blocks_unrendered_production_values() -> None:
     """Reject placeholder endpoints and image tags before production sync."""
     LOGGER.info("Checking preflight rejects the unprovisioned production template")
     values = yaml.safe_load((CHART / "values/production.yaml").read_text())
+    values["image"]["tag"] = "sha-REPLACE_WITH_GIT_SHA"
     with pytest.raises(ValueError, match="Unresolved or invalid"):
         validate_values(values)
 
@@ -202,6 +211,8 @@ def test_production_child_cannot_sync_placeholder_images() -> None:
             str(CHART / "values/production.yaml"),
             "--set",
             "launchValidation=true",
+            "--set",
+            "image.tag=sha-REPLACE_WITH_GIT_SHA",
         ],
         check=False,
         capture_output=True,

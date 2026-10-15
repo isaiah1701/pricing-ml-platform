@@ -9,8 +9,8 @@ output "replication_group_arn" {
 }
 
 output "configuration_endpoint_address" {
-  description = "Configuration endpoint used by cluster-aware Redis clients."
-  value       = aws_elasticache_replication_group.this.configuration_endpoint_address
+  description = "Cluster configuration endpoint or the budget standalone primary endpoint."
+  value       = var.replicas_per_node_group > 0 ? aws_elasticache_replication_group.this.configuration_endpoint_address : aws_elasticache_replication_group.this.primary_endpoint_address
 }
 
 output "port" {

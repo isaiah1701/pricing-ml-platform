@@ -48,6 +48,7 @@ data:
   PLATFORM_DATA_BUCKET: {{ required "platform.airflow.dataBucket is required" $airflow.dataBucket | quote }}
   AIRBNB_RAW_DATA_KEY: {{ $airflow.rawDataKey | quote }}
   REDIS_CONNECTION_STRING: {{ required "platform.airflow.redisConnectionString is required" $airflow.redisConnectionString | quote }}
+  REDIS_TYPE: {{ $airflow.redisType | default "redis_cluster" | quote }}
   AIRBNB_RAW_DATA_PATH: /opt/airflow/input/AB_NYC_2019.csv
   AIRBNB_FEATURE_DATA_PATH: /opt/airflow/work/listing_features.parquet
   AIRBNB_FEATURE_REPO_PATH: /opt/airflow/feature_repo

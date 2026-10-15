@@ -5,7 +5,7 @@ offline_store:
   type: file
 online_store:
   type: redis
-  redis_type: redis_cluster
+  redis_type: ${REDIS_TYPE}
   connection_string: ${REDIS_CONNECTION_STRING}
 entity_key_serialization_version: 3
 auth:
