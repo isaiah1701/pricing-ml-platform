@@ -61,6 +61,11 @@ publishing role. Configure these GitHub repository variables:
 Protect the GitHub `production` Environment with required reviewers and main
 branch restrictions. Do not store AWS access keys in GitHub.
 
+Newer GitHub repositories use immutable OIDC subjects. Set
+`github_oidc_repository="OWNER@OWNER_ID/REPOSITORY@REPOSITORY_ID"` in the bootstrap
+tfvars when the repository uses that format. Use the exact IDs, not wildcards;
+the publishing role remains restricted to the `production` Environment.
+
 ## 3. DNS delegation
 
 Production uses `platf0rm.site` itself for the application and HTTPS certificate.
@@ -160,16 +165,20 @@ helm upgrade --install argocd argo/argo-cd \
   --version 10.10.3 \
   --namespace argocd \
   --create-namespace \
-  --set configs.params.server\.insecure=true
+  -f serving/argocd/values-budget.yaml
 kubectl apply -f serving/argocd/root-application.yaml
 ```
 
-Manually sync the root Application, then the controller, monitoring, platform,
-and inference Applications in order. Automatic sync is disabled by default.
+Manually sync the root Application, then the controller, monitoring, and platform
+Applications. On an empty registry, complete section 7 before syncing inference;
+this prevents the initial Rollout from timing out while waiting for its first
+champion. Manual Kubernetes sync operations must include
+`syncOptions: ["CreateNamespace=true", "ServerSideApply=true"]` so namespaces and
+large CRDs are created correctly. Automatic sync is disabled by default.
 Enable it explicitly later if desired; a Git push alone does not launch AWS.
 
 Argo CD then installs Argo Rollouts, External Secrets Operator, AWS Load
-Balancer Controller, ExternalDNS, Metrics Server, Cluster Autoscaler,
+Balancer Controller, ExternalDNS, Metrics Server, optional Cluster Autoscaler,
 kube-prometheus-stack, Pushgateway, MLflow, Airflow, and the inference
 Rollout.
 
@@ -190,7 +199,7 @@ certificates are not browser-trusted. No ACM certificate is needed.
 Airflow runs API server, scheduler, DAG processor, and triggerer in separate
 containers in one pod, using LocalExecutor and the shared RWO data volume. The
 single pod uses Recreate upgrades and is not a highly available Airflow topology.
-Production therefore keeps one on-demand training node. Component-specific startup
+The budget profile shares one on-demand worker across the platform. Component-specific startup
 and health probes supervise each process; database and FAB migrations run first.
 DAGs start paused so monitoring workflows are enabled only after their production
 feature/outcome files are supplied in `/opt/airflow/input`.
