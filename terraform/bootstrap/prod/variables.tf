@@ -43,6 +43,18 @@ variable "github_repository" {
   }
 }
 
+variable "github_oidc_repository" {
+  description = "Optional immutable OWNER@OWNER_ID/REPOSITORY@REPOSITORY_ID subject segment for newer GitHub repositories."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.github_oidc_repository == null || can(regex("^[^/@]+@[0-9]+/[^/@]+@[0-9]+$", var.github_oidc_repository))
+    error_message = "Use the exact OWNER@OWNER_ID/REPOSITORY@REPOSITORY_ID OIDC subject segment."
+  }
+}
+
 variable "github_environment" {
   description = "Protected GitHub Environment allowed to publish production images."
   type        = string

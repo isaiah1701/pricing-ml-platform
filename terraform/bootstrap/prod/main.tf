@@ -1,3 +1,7 @@
+locals {
+  github_subject_repository = coalesce(var.github_oidc_repository, var.github_repository, "disabled")
+}
+
 resource "aws_s3_bucket" "terraform_state" {
   bucket = local.state_bucket_name
 
@@ -90,9 +94,9 @@ data "aws_iam_policy_document" "terraform_execution_assume_role" {
         test     = "StringLike"
         variable = "token.actions.githubusercontent.com:sub"
         values = [
-          "repo:${statement.value}:ref:refs/heads/main",
-          "repo:${statement.value}:ref:refs/tags/v*",
-          "repo:${statement.value}:environment:${var.github_environment}"
+          "repo:${local.github_subject_repository}:ref:refs/heads/main",
+          "repo:${local.github_subject_repository}:ref:refs/tags/v*",
+          "repo:${local.github_subject_repository}:environment:${var.github_environment}"
         ]
       }
     }
@@ -368,7 +372,7 @@ data "aws_iam_policy_document" "github_ecr_publish_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:environment:${var.github_environment}"]
+      values   = ["repo:${local.github_subject_repository}:environment:${var.github_environment}"]
     }
   }
 }
