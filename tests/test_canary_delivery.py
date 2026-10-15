@@ -119,7 +119,7 @@ def test_https_uses_cert_manager_secret_and_traefik(
     ]
     assert (
         bootstrap["addons"]["traefik"]["values"]["service"]["annotations"][
-            "external-dns.alpha.kubernetes.io/hostname"
+            "external-dns.kubernetes.io/hostname"
         ]
         == "platf0rm.site"
     )

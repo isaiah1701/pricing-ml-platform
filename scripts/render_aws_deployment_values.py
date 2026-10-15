@@ -145,7 +145,7 @@ def render_values(
     bootstrap = _load_yaml(bootstrap_values_path)
     addons = bootstrap["addons"]
     addons["traefik"]["values"]["service"]["annotations"][
-        "external-dns.alpha.kubernetes.io/hostname"
+        "external-dns.kubernetes.io/hostname"
     ] = coordinates["application_hostname"]
     addons["awsLoadBalancerController"]["values"]["clusterName"] = coordinates[
         "cluster_name"
