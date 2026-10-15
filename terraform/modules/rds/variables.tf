@@ -38,7 +38,7 @@ variable "password" {
   sensitive   = true
 
   validation {
-    condition     = var.password == null || (length(var.password) >= 8 && length(var.password) <= 128 && !can(regex("[/\"@]", var.password)))
+    condition     = var.password == null ? true : (length(var.password) >= 8 && length(var.password) <= 128 && !can(regex("[/\"@]", var.password)))
     error_message = "password must be 8-128 characters and cannot contain slash, double quote, or at-sign characters."
   }
 }
@@ -62,7 +62,7 @@ variable "postgresql_engine_version" {
   nullable    = true
 
   validation {
-    condition     = var.postgresql_engine_version == null || length(trimspace(var.postgresql_engine_version)) > 0
+    condition     = var.postgresql_engine_version == null ? true : length(trimspace(var.postgresql_engine_version)) > 0
     error_message = "postgresql_engine_version must not be an empty string when set."
   }
 }
@@ -96,7 +96,7 @@ variable "max_allocated_storage" {
   nullable    = true
 
   validation {
-    condition     = var.max_allocated_storage == null || var.max_allocated_storage >= 20
+    condition     = var.max_allocated_storage == null ? true : var.max_allocated_storage >= 20
     error_message = "max_allocated_storage must be at least 20 GiB when set."
   }
 }

@@ -10,10 +10,8 @@ trainingImage:
 
 ingress:
   enabled: true
-  className: alb
-  scheme: internet-facing
-  certificateArn: ""
-  host: "prices.5hort.site"
+  className: traefik
+  host: "platf0rm.site"
 
 monitoring:
   serviceMonitor:
@@ -46,8 +44,10 @@ platform:
   awsRegion: eu-west-2
   mlflow:
     databaseSecretArn: "REPLACE_WITH_MLFLOW_DATABASE_SECRET_ARN"
+    databaseHost: "REPLACE_WITH_MLFLOW_DATABASE_HOST"
     artifactRoot: "s3://REPLACE_WITH_PLATFORM_DATA_BUCKET/mlflow"
   airflow:
     databaseSecretArn: "REPLACE_WITH_AIRFLOW_DATABASE_SECRET_ARN"
+    databaseHost: "REPLACE_WITH_AIRFLOW_DATABASE_HOST"
     dataBucket: "REPLACE_WITH_PLATFORM_DATA_BUCKET"
-    redisConnectionString: "rediss://REPLACE_WITH_REDIS_CONFIGURATION_ENDPOINT:6379"
+    redisConnectionString: "REPLACE_WITH_REDIS_CONFIGURATION_ENDPOINT:6379,ssl=true"

@@ -16,8 +16,12 @@ import yaml
 LOGGER = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TERRAFORM_DIR = PROJECT_ROOT / "terraform" / "environments" / "prod"
-DEFAULT_PRODUCTION_VALUES = PROJECT_ROOT / "serving" / "helm" / "values" / "production.yaml"
-DEFAULT_BOOTSTRAP_VALUES = PROJECT_ROOT / "serving" / "helm" / "values" / "bootstrap.yaml"
+DEFAULT_PRODUCTION_VALUES = (
+    PROJECT_ROOT / "serving" / "helm" / "values" / "production.yaml"
+)
+DEFAULT_BOOTSTRAP_VALUES = (
+    PROJECT_ROOT / "serving" / "helm" / "values" / "bootstrap.yaml"
+)
 REQUIRED_COORDINATES: frozenset[str] = frozenset(
     {
         "airflow_database_secret_arn",
@@ -31,6 +35,12 @@ REQUIRED_COORDINATES: frozenset[str] = frozenset(
         "serving_repository",
         "training_repository",
         "aws_region",
+        "airflow_database_host",
+        "airflow_database_port",
+        "airflow_database_name",
+        "mlflow_database_host",
+        "mlflow_database_port",
+        "mlflow_database_name",
     }
 )
 
@@ -53,7 +63,9 @@ def load_coordinates(terraform_directory: Path) -> dict[str, str]:
     if not isinstance(decoded, dict):
         LOGGER.error("Terraform deployment_coordinates output was not an object")
         raise TypeError("deployment_coordinates must be a JSON object")
-    coordinates = {str(key): str(value) for key, value in decoded.items()}
+    coordinates = {
+        str(key): str(value) for key, value in decoded.items() if value is not None
+    }
     missing = sorted(
         key for key in REQUIRED_COORDINATES if not coordinates.get(key, "").strip()
     )
@@ -94,13 +106,23 @@ def render_values(
     bootstrap_values_path: Path,
 ) -> None:
     """Inject Terraform outputs into workload and bootstrap Helm values."""
+    missing = sorted(
+        key for key in REQUIRED_COORDINATES if not coordinates.get(key, "").strip()
+    )
+    if missing:
+        LOGGER.error("Cannot render incomplete deployment coordinates: %s", missing)
+        raise ValueError(f"Missing Terraform deployment coordinates: {missing}")
+    LOGGER.info("Rendering validated production deployment coordinates")
     production = _load_yaml(production_values_path)
     production["image"]["repository"] = coordinates["serving_repository"]
-    production["trainingImage"]["repository"] = coordinates[
-        "training_repository"
-    ]
+    production["trainingImage"]["repository"] = coordinates["training_repository"]
     production["ingress"]["host"] = coordinates["application_hostname"]
     production["platform"]["awsRegion"] = coordinates["aws_region"]
+    for component in ("mlflow", "airflow"):
+        for field in ("host", "port", "name"):
+            production["platform"][component][f"database{field.title()}"] = coordinates[
+                f"{component}_database_{field}"
+            ]
     production["platform"]["mlflow"]["databaseSecretArn"] = coordinates[
         "mlflow_database_secret_arn"
     ]
@@ -119,21 +141,18 @@ def render_values(
 
     bootstrap = _load_yaml(bootstrap_values_path)
     addons = bootstrap["addons"]
+    addons["traefik"]["values"]["service"]["annotations"][
+        "external-dns.alpha.kubernetes.io/hostname"
+    ] = coordinates["application_hostname"]
     addons["awsLoadBalancerController"]["values"]["clusterName"] = coordinates[
         "cluster_name"
     ]
-    addons["awsLoadBalancerController"]["values"]["region"] = coordinates[
-        "aws_region"
+    addons["awsLoadBalancerController"]["values"]["region"] = coordinates["aws_region"]
+    addons["clusterAutoscaler"]["values"]["autoDiscovery"]["clusterName"] = coordinates[
+        "cluster_name"
     ]
-    addons["clusterAutoscaler"]["values"]["autoDiscovery"][
-        "clusterName"
-    ] = coordinates["cluster_name"]
-    addons["clusterAutoscaler"]["values"]["awsRegion"] = coordinates[
-        "aws_region"
-    ]
-    addons["externalDns"]["values"]["domainFilters"] = [
-        coordinates["domain_name"]
-    ]
+    addons["clusterAutoscaler"]["values"]["awsRegion"] = coordinates["aws_region"]
+    addons["externalDns"]["values"]["domainFilters"] = [coordinates["domain_name"]]
     addons["externalDns"]["values"]["txtOwnerId"] = coordinates["cluster_name"]
 
     _write_yaml(production_values_path, production)

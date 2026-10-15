@@ -2,8 +2,8 @@ aws_region = "eu-west-2"
 
 platform_admin_principal_arn = "arn:aws:iam::655916164714:user/isaiahOct26"
 
-domain_name                  = "5hort.site"
-application_hostname          = "prices.5hort.site"
+domain_name                  = "platf0rm.site"
+application_hostname          = "platf0rm.site"
 create_route53_hosted_zone    = true
 route53_hosted_zone_id        = null
 

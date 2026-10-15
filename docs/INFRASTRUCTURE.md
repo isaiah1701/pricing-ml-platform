@@ -7,14 +7,19 @@ placeholders.
 - `terraform/modules/ecr` creates immutable, scan-on-push image repositories. The environment creates one repository for the serving image and one for the training image.
 - `terraform/modules/vpc` creates two-AZ public/private networking, NAT gateways, Kubernetes subnet tags, an S3 gateway endpoint, and private ECR, STS, and CloudWatch Logs endpoints.
 - `terraform/modules/eks` creates an encrypted EKS cluster with audit logs, an EBS CSI driver role, explicit API access entries, and three managed node pools.
-- `terraform/modules/route-53` can create or reuse the `5hort.site` hosted zone and DNS-validates a regional ACM certificate for the apex and wildcard domain. ExternalDNS owns the ALB record.
+- `terraform/modules/route-53` creates or reuses the `platf0rm.site` hosted zone. ExternalDNS owns the apex NLB record; Kubernetes cert-manager issues and renews the HTTPS certificate used by Traefik.
 - `terraform/modules/rds`, `terraform/modules/redis`, and `terraform/modules/s3` provide separate MLflow/Airflow PostgreSQL stores, the Feast online store, and Object-Locked platform artifacts.
 
 ## Node-pool contract
 
 The `system` pool hosts EKS add-ons. The `serving` and `training` pools are deliberately separate and tainted. A serving Deployment must select `workload=serving` and tolerate `workload=serving:NoSchedule`; a training Job must use the equivalent `training` selector and toleration. This prevents scheduled retraining workloads from consuming serving capacity.
 
-Training defaults to CPU instances because this platform uses tabular models. Its desired size is zero in every environment to avoid paying for idle training nodes. Before scheduling a training Job, use a cluster autoscaler or scale that node group up through the deployment workflow. A GPU pool can be added later only if the chosen model genuinely needs it.
+Training defaults to CPU instances because this platform uses tabular models.
+Production keeps one on-demand training node for Airflow's LocalExecutor and its
+control-plane components; the dev/staging placeholders may scale to zero. The
+Cluster Autoscaler discovers the underlying Auto Scaling groups through explicit
+Terraform-managed tags. Training work stays off the serving pool. A GPU pool can
+be added later if the model needs it.
 
 ## State and deployment
 

@@ -1,0 +1,17 @@
+{{- if and .Values.launchValidation (not .Values.bootstrap.enabled) }}
+{{- range $image := list .Values.image .Values.trainingImage }}
+{{- if or (not (regexMatch "^[0-9]{12}\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com/" $image.repository)) (not (regexMatch "^sha-[0-9a-f]{40}$" $image.tag)) }}
+{{- fail "Launch requires rendered AWS values and published sha-<40-character git SHA> images" }}
+{{- end }}
+{{- end }}
+{{- range $coordinate := list .Values.platform.mlflow.artifactRoot .Values.platform.airflow.dataBucket .Values.platform.airflow.redisConnectionString }}
+{{- if or (empty $coordinate) (contains "REPLACE_WITH" $coordinate) }}
+{{- fail "Render all production artifact, data, and Redis coordinates before syncing" }}
+{{- end }}
+{{- end }}
+{{- range $component := list .Values.platform.mlflow .Values.platform.airflow }}
+{{- if or (empty $component.databaseHost) (contains "REPLACE_WITH" $component.databaseHost) (contains "REPLACE_WITH" $component.databaseSecretArn) }}
+{{- fail "Render Terraform deployment coordinates before syncing production Applications" }}
+{{- end }}
+{{- end }}
+{{- end }}

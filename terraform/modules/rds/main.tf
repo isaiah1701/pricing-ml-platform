@@ -38,7 +38,7 @@ resource "aws_db_instance" "this" {
 
   lifecycle {
     precondition {
-      condition     = var.max_allocated_storage == null || var.max_allocated_storage >= var.allocated_storage
+      condition     = var.max_allocated_storage == null ? true : var.max_allocated_storage >= var.allocated_storage
       error_message = "max_allocated_storage must be greater than or equal to allocated_storage when set."
     }
 

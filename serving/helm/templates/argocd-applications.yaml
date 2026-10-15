@@ -157,6 +157,7 @@ spec:
       releaseName: airbnb-platform
       valueFiles: ["values/base.yaml", "values/production.yaml"]
       valuesObject:
+        launchValidation: true
         bootstrap:
           enabled: false
         workload:
@@ -168,8 +169,13 @@ spec:
   destination:
     server: {{ .Values.destination.server }}
     namespace: {{ .Values.platform.mlflow.namespace }}
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/template/metadata/annotations/reloader.stakater.com~1last-reloaded-from
   syncPolicy:
-    syncOptions: ["CreateNamespace=true"]
+    syncOptions: ["CreateNamespace=true", "RespectIgnoreDifferences=true"]
     {{- if .Values.syncPolicy.automated }}
     automated:
       prune: {{ .Values.syncPolicy.prune }}
@@ -195,6 +201,7 @@ spec:
       releaseName: airbnb-inference
       valueFiles: ["values/base.yaml", "values/production.yaml"]
       valuesObject:
+        launchValidation: true
         bootstrap:
           enabled: false
         externalSecret:

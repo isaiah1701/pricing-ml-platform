@@ -2,6 +2,27 @@
 {{- .Chart.Name | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+{{- define "airbnb.airflowProbe" -}}
+{{- if eq . "api-server" }}
+httpGet:
+  path: /api/v2/version
+  port: http
+{{- else if eq . "scheduler" }}
+httpGet:
+  path: /health
+  port: 8974
+{{- else }}
+exec:
+  command:
+    - airflow
+    - jobs
+    - check
+    - --job-type
+    - {{ if eq . "dag-processor" }}DagProcessorJob{{ else }}TriggererJob{{ end }}
+    - --local
+{{- end }}
+{{- end }}
+
 {{- define "airbnb.fullname" -}}
 {{- .Release.Name | trunc 63 | trimSuffix "-" }}
 {{- end }}

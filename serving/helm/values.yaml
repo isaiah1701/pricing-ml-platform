@@ -1,6 +1,9 @@
 bootstrap:
   enabled: false
 
+# Child production Applications enable this; offline CI can render templates.
+launchValidation: false
+
 workload:
   enabled: true
 
@@ -26,10 +29,11 @@ prometheus:
 
 ingress:
   enabled: false
-  className: alb
-  scheme: internet-facing
-  certificateArn: ""
+  className: traefik
   host: ""
+  tlsSecretName: airbnb-inference-tls
+  issuerName: letsencrypt
+  acmeServer: https://acme-v02.api.letsencrypt.org/directory
 
 monitoring:
   serviceMonitor:
@@ -149,6 +153,9 @@ platform:
     serviceAccountName: mlflow
     replicas: 2
     databaseSecretArn: ""
+    databaseHost: ""
+    databasePort: 5432
+    databaseName: mlflow
     artifactRoot: ""
     resources:
       requests:
@@ -161,6 +168,12 @@ platform:
     namespace: airflow
     serviceAccountName: airflow
     databaseSecretArn: ""
+    databaseHost: ""
+    databasePort: 5432
+    databaseName: airflow
+    parallelism: 2
+    adminUsername: admin
+    adminEmail: admin@localhost
     dataBucket: ""
     rawDataKey: data/AB_NYC_2019.csv
     redisConnectionString: ""

@@ -11,6 +11,8 @@ kind: Deployment
 metadata:
   name: mlflow
   namespace: {{ .Values.platform.mlflow.namespace }}
+  annotations:
+    secret.reloader.stakater.com/reload: mlflow-database
 spec:
   replicas: {{ .Values.platform.mlflow.replicas }}
   selector:

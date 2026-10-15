@@ -26,22 +26,26 @@ Secret flow:
 
 ```text
 AWS Secrets Manager -> External Secrets Operator -> ClusterSecretStore
--> ExternalSecret -> Kubernetes Secret -> inference pod
+-> ExternalSecret -> Kubernetes Secret -> MLflow/Airflow pods
 ```
 
 The root manifest is `serving/argocd/root-application.yaml`. It installs the
 same Helm chart in bootstrap mode. Bootstrap mode renders an `AppProject` and
-three child Applications but no inference workload:
+child Applications for controllers, monitoring, platform services, and inference:
 
 - `external-secrets` at wave `-2` installs the pinned ESO chart and CRDs. Its
   controller service account is the subject of the Terraform EKS Pod Identity
   association.
-- `airbnb-inference-secrets` at wave `-1` renders only the
-  `ClusterSecretStore` and `ExternalSecret` from this repository. The operator
-  therefore exists before its custom resources.
-- `airbnb-inference` at wave `0` renders the Deployment, Service,
-  ServiceAccount, ConfigMap, and HPA, while the separate secrets child owns the
-  Kubernetes Secret lifecycle.
+- cert-manager and Traefik install certificate and routing CRDs. Traefik uses an
+  NLB; ExternalDNS publishes its Service hostname. cert-manager issues the TLS
+  Secret through HTTP-01 and the inference IngressRoute terminates TLS.
+- `airbnb-platform` at wave `-1` renders MLflow, Airflow, their ExternalSecrets,
+  persistent storage, and monitoring assets. Database endpoints come from
+  Terraform; RDS-managed secrets supply only usernames and passwords. Reloader
+  restarts these deployments when database Secrets rotate.
+- `airbnb-inference` at wave `0` renders the Rollout, Services, ServiceAccount,
+  ConfigMap, HPA, Certificate, Issuer, and Traefik routing resources. Argo
+  Rollouts updates TraefikService weights during canary delivery.
 
 Every child has the Argo resource finalizer, configurable source repository,
 revision, destination cluster/namespace, automated sync, pruning, self-healing,
@@ -77,16 +81,15 @@ scanned image reference; production must never use `latest`.
 
 The repository already organizes AWS code under `terraform/modules` and
 `terraform/environments`, so no duplicate `serving/terraform` tree was added.
-The Secrets Manager resource follows the reference project's write-only
-`secret_string_wo` pattern, adapted as `terraform/modules/secrets-manager` to
-match this repository's reusable-module convention. Production currently
-creates the secret container without a value, keeping plaintext and secret
-material out of Git and normal Terraform plans/state.
+The optional reusable Secrets Manager module supports write-only secret values.
+Production uses RDS-managed credential secrets instead. Airflow runtime signing
+and encryption keys are generated once by External Secrets and retained in a
+Kubernetes Secret; back up that Secret securely alongside the database.
 
 The production environment defines:
 
-- an ESO role limited to `DescribeSecret` and `GetSecretValue` on exactly the
-  inference secret;
+- an ESO role limited to `DescribeSecret` and `GetSecretValue` on the two
+  RDS-managed database secrets;
 - an EKS Pod Identity association for the `external-secrets` controller;
 - an inference role limited to `ListBucket`, `GetObject`, and `GetObjectVersion`
   for the MLflow artifact prefix;
@@ -116,6 +119,12 @@ have been verified:
 - External Secrets Operator compatibility with the selected Kubernetes version;
 - network paths/DNS/TLS from EKS to MLflow, Secrets Manager, STS, and S3;
 - actual service sizing and CatBoost model startup latency.
+
+Run `uv run python scripts/validate_aws_deployment.py --check-images` before
+launch. It rejects unresolved coordinates and verifies immutable ECR tags.
+Production child Applications also enable a Helm launch gate. CI renders with
+the gate disabled so pre-provisioning templates remain testable. CI builds both
+serving and training images and smoke-tests Airflow migrations and FAB user setup.
 
 The CI workflow performs tests, linting, a Docker build, Helm rendering,
 kubeconform checks, Terraform formatting, and `terraform validate`. It neither

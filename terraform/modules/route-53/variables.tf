@@ -18,33 +18,9 @@ variable "hosted_zone_name" {
   nullable    = true
 
   validation {
-    condition     = !var.create_hosted_zone || (var.hosted_zone_name != null && length(trimspace(var.hosted_zone_name)) > 0)
+    condition     = var.create_hosted_zone ? try(length(trimspace(var.hosted_zone_name)) > 0, false) : true
     error_message = "hosted_zone_name is required when create_hosted_zone is true."
   }
-}
-
-variable "create_certificate" {
-  description = "Create and DNS-validate a regional ACM certificate."
-  type        = bool
-  default     = false
-}
-
-variable "certificate_domain_name" {
-  description = "Primary DNS name for the ACM certificate. Required when create_certificate is true."
-  type        = string
-  default     = null
-  nullable    = true
-
-  validation {
-    condition     = !var.create_certificate || var.certificate_domain_name != null
-    error_message = "certificate_domain_name is required when create_certificate is true."
-  }
-}
-
-variable "certificate_subject_alternative_names" {
-  description = "Additional DNS names for the ACM certificate, such as *.example.com."
-  type        = list(string)
-  default     = []
 }
 
 variable "records" {
@@ -72,7 +48,7 @@ variable "alias_records" {
 }
 
 variable "tags" {
-  description = "Tags applied to the ACM certificate. Route 53 records do not support tags."
+  description = "Tags applied to the hosted zone. Route 53 records do not support tags."
   type        = map(string)
   default     = {}
 }

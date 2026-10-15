@@ -100,6 +100,11 @@ jobs:
              .trainingImage.tag = "${{ steps.images.outputs.tag }}"'
             serving/helm/values/production.yaml
 
+      - name: Validate production coordinates and published images
+        run: |
+          python -m pip install PyYAML==6.0.3
+          python scripts/validate_aws_deployment.py --check-images
+
       - name: Open GitOps image promotion pull request
         uses: peter-evans/create-pull-request@v7
         with:

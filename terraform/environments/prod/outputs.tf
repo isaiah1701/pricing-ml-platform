@@ -13,18 +13,13 @@ output "ecr_repository_urls" {
   value       = { for name, repository in module.ecr : name => repository.repository_url }
 }
 
-output "serving_certificate_arn" {
-  description = "Validated ACM certificate for the production domain and its subdomains."
-  value       = module.route53.certificate_arn
-}
-
 output "route53_name_servers" {
   description = "Registrar delegation targets when Terraform creates the hosted zone."
   value       = module.route53.hosted_zone_name_servers
 }
 
 output "application_hostname" {
-  description = "Public hostname managed by ExternalDNS for the inference ingress."
+  description = "Public hostname managed by ExternalDNS for the Traefik NLB."
   value       = var.application_hostname
 }
 
@@ -69,14 +64,19 @@ output "deployment_coordinates" {
     account_id                  = data.aws_caller_identity.current.account_id
     aws_region                  = var.aws_region
     airflow_database_secret_arn = module.airflow_database.master_user_secret_arn
+    airflow_database_host       = module.airflow_database.address
+    airflow_database_port       = tostring(module.airflow_database.port)
+    airflow_database_name       = module.airflow_database.database_name
     application_hostname        = var.application_hostname
-    certificate_arn             = module.route53.certificate_arn
     cluster_name                = module.eks.cluster_name
     domain_name                 = var.domain_name
     mlflow_artifact_root        = "s3://${module.platform_data.bucket_name}/${trimsuffix(var.mlflow_artifact_prefix, "/")}"
     mlflow_database_secret_arn  = module.mlflow_database.master_user_secret_arn
+    mlflow_database_host        = module.mlflow_database.address
+    mlflow_database_port        = tostring(module.mlflow_database.port)
+    mlflow_database_name        = module.mlflow_database.database_name
     platform_data_bucket        = module.platform_data.bucket_name
-    redis_connection_string     = "rediss://${module.redis.configuration_endpoint_address}:${module.redis.port}"
+    redis_connection_string     = "${module.redis.configuration_endpoint_address}:${module.redis.port},ssl=true"
     serving_repository          = module.ecr["serving"].repository_url
     training_repository         = module.ecr["training"].repository_url
   }

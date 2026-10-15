@@ -115,7 +115,6 @@ module "eks" {
     }
 
     aws-ebs-csi-driver = {
-      before_compute           = true
       service_account_role_arn = aws_iam_role.ebs_csi_driver.arn
     }
   }
@@ -159,4 +158,24 @@ resource "aws_iam_role" "ebs_csi_driver" {
 resource "aws_iam_role_policy_attachment" "ebs_csi_driver" {
   role       = aws_iam_role.ebs_csi_driver.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+}
+
+# EKS node-group tags do not propagate to the underlying Auto Scaling groups.
+resource "aws_autoscaling_group_tag" "discovery" {
+  for_each = merge([
+    for pool in keys(local.managed_node_groups) : {
+      for key, value in {
+        "k8s.io/cluster-autoscaler/enabled"                      = "true"
+        "k8s.io/cluster-autoscaler/${var.cluster_name}"          = "owned"
+        "k8s.io/cluster-autoscaler/node-template/label/workload" = pool
+      } : "${pool}:${key}" => { pool = pool, key = key, value = value }
+    }
+  ]...)
+
+  autoscaling_group_name = module.eks.eks_managed_node_groups[each.value.pool].node_group_autoscaling_group_names[0]
+  tag {
+    key                 = each.value.key
+    value               = each.value.value
+    propagate_at_launch = true
+  }
 }

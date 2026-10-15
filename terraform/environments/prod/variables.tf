@@ -13,13 +13,13 @@ variable "project_name" {
 variable "domain_name" {
   description = "Production DNS zone used by the public model-serving endpoint."
   type        = string
-  default     = "5hort.site"
+  default     = "platf0rm.site"
 }
 
 variable "application_hostname" {
-  description = "Public DNS hostname for the inference ALB."
+  description = "Public DNS hostname for the Traefik inference endpoint."
   type        = string
-  default     = "prices.5hort.site"
+  default     = "platf0rm.site"
 }
 
 variable "create_route53_hosted_zone" {
@@ -127,7 +127,7 @@ variable "serving_node_pool" {
 }
 
 variable "training_node_pool" {
-  description = "Dedicated offline CPU training capacity."
+  description = "Dedicated CPU capacity for Airflow LocalExecutor and training; keep one on-demand node for the control plane."
   type = object({
     instance_types = list(string)
     min_size       = number
@@ -138,10 +138,10 @@ variable "training_node_pool" {
   })
   default = {
     instance_types = ["m7i.xlarge"]
-    min_size       = 0
+    min_size       = 1
     max_size       = 5
-    desired_size   = 0
-    capacity_type  = "SPOT"
+    desired_size   = 1
+    capacity_type  = "ON_DEMAND"
   }
 }
 

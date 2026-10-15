@@ -1,0 +1,12 @@
+project: airbnb_price_prediction
+registry: data/registry.db
+provider: local
+offline_store:
+  type: file
+online_store:
+  type: redis
+  redis_type: redis_cluster
+  connection_string: ${REDIS_CONNECTION_STRING}
+entity_key_serialization_version: 3
+auth:
+  type: no_auth

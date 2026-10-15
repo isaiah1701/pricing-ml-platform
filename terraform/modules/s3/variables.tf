@@ -15,7 +15,7 @@ variable "noncurrent_version_expiration_days" {
   nullable    = true
 
   validation {
-    condition     = var.noncurrent_version_expiration_days == null || var.noncurrent_version_expiration_days >= 1
+    condition     = var.noncurrent_version_expiration_days == null ? true : var.noncurrent_version_expiration_days >= 1
     error_message = "noncurrent_version_expiration_days must be at least 1 when set."
   }
 }

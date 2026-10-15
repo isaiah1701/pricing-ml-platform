@@ -14,9 +14,8 @@ spec:
       stableService: {{ include "airbnb.fullname" . }}
       canaryService: {{ include "airbnb.fullname" . }}-canary
       trafficRouting:
-        alb:
-          ingress: {{ include "airbnb.fullname" . }}
-          servicePort: {{ .Values.service.port }}
+        traefik:
+          weightedTraefikServiceName: {{ include "airbnb.fullname" . }}
       steps:
         - setWeight: {{ .Values.rollout.initialWeight }}
         - pause:

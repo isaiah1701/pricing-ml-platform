@@ -1,28 +1,72 @@
 {{- if and .Values.platform.enabled (not .Values.bootstrap.enabled) }}
+{{- $airflow := .Values.platform.airflow }}
+{{- $image := printf "%s:%s" .Values.trainingImage.repository .Values.trainingImage.tag }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ .Values.platform.airflow.serviceAccountName }}
-  namespace: {{ .Values.platform.airflow.namespace }}
-automountServiceAccountToken: true
+  name: {{ $airflow.serviceAccountName }}
+  namespace: {{ $airflow.namespace }}
+automountServiceAccountToken: false
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: airflow-data
-  namespace: {{ .Values.platform.airflow.namespace }}
+  namespace: {{ $airflow.namespace }}
 spec:
-  accessModes: ["ReadWriteOnce"]
-  storageClassName: {{ .Values.platform.airflow.storageClassName }}
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ $airflow.storageClassName }}
   resources:
     requests:
-      storage: {{ .Values.platform.airflow.storageSize }}
+      storage: {{ $airflow.storageSize }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: airflow-runtime
+  namespace: {{ $airflow.namespace }}
+data:
+  AWS_REGION: {{ .Values.platform.awsRegion | quote }}
+  AIRFLOW_HOME: /opt/airflow/home
+  AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__PARALLELISM: {{ $airflow.parallelism | quote }}
+  AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+  AIRFLOW__API__BASE_URL: http://airflow.airflow.svc.cluster.local:8080
+  AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://localhost:8080/execution/
+  AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+  MLFLOW_TRACKING_URI: http://mlflow.mlflow.svc.cluster.local:5000
+  MLFLOW_DISABLE_AGENT_HINT: "1"
+  PROMETHEUS_PUSHGATEWAY_URL: http://prometheus-pushgateway.monitoring.svc.cluster.local:9091
+  PLATFORM_DATA_BUCKET: {{ required "platform.airflow.dataBucket is required" $airflow.dataBucket | quote }}
+  AIRBNB_RAW_DATA_KEY: {{ $airflow.rawDataKey | quote }}
+  REDIS_CONNECTION_STRING: {{ required "platform.airflow.redisConnectionString is required" $airflow.redisConnectionString | quote }}
+  AIRBNB_RAW_DATA_PATH: /opt/airflow/input/AB_NYC_2019.csv
+  AIRBNB_FEATURE_DATA_PATH: /opt/airflow/work/listing_features.parquet
+  AIRBNB_FEATURE_REPO_PATH: /opt/airflow/feature_repo
+  AIRBNB_VERIFY_SCRIPT_PATH: /app/scripts/verify_feature_store.py
+  AIRBNB_SNAPSHOT_ROOT: /opt/airflow/data-snapshots
+  AIRBNB_SNAPSHOT_S3_URI: {{ printf "s3://%s/snapshots" $airflow.dataBucket | quote }}
+  AIRBNB_TRAINING_WORK_DIR: /opt/airflow/training-work
+  DRIFT_REFERENCE_PATH: /opt/airflow/work/listing_features.parquet
+  DRIFT_PRODUCTION_PATH: /opt/airflow/input/production_features.parquet
+  DRIFT_REPORT_DIR: /opt/airflow/reports
+  DRIFT_PROMETHEUS_METRICS_PATH: /opt/airflow/monitoring-metrics/drift.prom
+  RETRAINING_EVENT_DIR: /opt/airflow/retraining-events
+  MODEL_QUALITY_OUTCOMES_PATH: /opt/airflow/input/model_outcomes.parquet
+  MODEL_QUALITY_REPORT_DIR: /opt/airflow/reports
+  MODEL_QUALITY_PROMETHEUS_METRICS_PATH: /opt/airflow/monitoring-metrics/model_quality.prom
+  SERVING_URL: http://airbnb-inference.airbnb-inference.svc.cluster.local
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: airflow
-  namespace: {{ .Values.platform.airflow.namespace }}
+  namespace: {{ $airflow.namespace }}
+  annotations:
+    secret.reloader.stakater.com/reload: airflow-database,airflow-runtime
 spec:
   replicas: 1
   strategy:
@@ -34,8 +78,12 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: airflow
+      annotations:
+        checksum/config: {{ printf "%s:%s" (toYaml $airflow) .Values.platform.awsRegion | sha256sum }}
     spec:
-      serviceAccountName: {{ .Values.platform.airflow.serviceAccountName }}
+      serviceAccountName: {{ $airflow.serviceAccountName }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 120
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -43,99 +91,95 @@ spec:
         fsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
-      {{- if .Values.platform.airflow.dataBootstrapEnabled }}
       initContainers:
-        - name: download-raw-data
-          image: {{ printf "%s:%s" (required "trainingImage.repository is required" .Values.trainingImage.repository) (required "trainingImage.tag is required" .Values.trainingImage.tag) | quote }}
-          command: ["sh", "-c"]
+        - name: migrate-database
+          image: {{ $image | quote }}
+          command: [sh, -ec]
           args:
             - |
-              set -eu
-              mkdir -p /opt/airflow/input
-              mkdir -p /opt/airflow/feature_repo/data
+              airflow db migrate
+              airflow fab-db migrate
+              airflow users create --username {{ $airflow.adminUsername | quote }} --firstname Platform --lastname Admin --role Admin --email {{ $airflow.adminEmail | quote }} --password "$AIRFLOW_ADMIN_PASSWORD"
+              mkdir -p /opt/airflow/dags
+              cp -R /app/pipelines /app/retraining /opt/airflow/dags/
+          envFrom:
+            - configMapRef:
+                name: airflow-runtime
+            - secretRef:
+                name: airflow-database
+            - secretRef:
+                name: airflow-runtime
+          volumeMounts:
+            - name: airflow-data
+              mountPath: /opt/airflow
+      {{- if $airflow.dataBootstrapEnabled }}
+        - name: download-raw-data
+          image: {{ $image | quote }}
+          command: [sh, -ec]
+          args:
+            - |
+              mkdir -p /opt/airflow/input /opt/airflow/work /opt/airflow/feature_repo/data
               cp /app/feature_repo/*.py /opt/airflow/feature_repo/
-              cp /app/feature_repo/feature_store.yaml /opt/airflow/feature_repo/
+              cp /app/feature_repo/feature_store.aws.yaml /opt/airflow/feature_repo/feature_store.yaml
               python -c "import boto3, os; boto3.client('s3').download_file(os.environ['PLATFORM_DATA_BUCKET'], os.environ['AIRBNB_RAW_DATA_KEY'], '/opt/airflow/input/AB_NYC_2019.csv')"
-          env:
-            - name: AWS_REGION
-              value: {{ .Values.platform.awsRegion | quote }}
-            - name: PLATFORM_DATA_BUCKET
-              value: {{ required "platform.airflow.dataBucket is required" .Values.platform.airflow.dataBucket | quote }}
-            - name: AIRBNB_RAW_DATA_KEY
-              value: {{ .Values.platform.airflow.rawDataKey | quote }}
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: airflow-runtime
           volumeMounts:
             - name: airflow-data
               mountPath: /opt/airflow
       {{- end }}
       containers:
-        - name: airflow
-          image: {{ printf "%s:%s" (required "trainingImage.repository is required" .Values.trainingImage.repository) (required "trainingImage.tag is required" .Values.trainingImage.tag) | quote }}
+      {{- range $component := list "api-server" "scheduler" "dag-processor" "triggerer" }}
+        - name: {{ $component }}
+          image: {{ $image | quote }}
           imagePullPolicy: IfNotPresent
-          command: ["airflow", "standalone"]
+          command: [airflow, {{ $component }}]
           envFrom:
+            - configMapRef:
+                name: airflow-runtime
             - secretRef:
                 name: airflow-database
-          env:
-            - name: AWS_REGION
-              value: {{ .Values.platform.awsRegion | quote }}
-            - name: AIRFLOW_HOME
-              value: /opt/airflow/home
-            - name: AIRFLOW__CORE__DAGS_FOLDER
-              value: /app/pipelines
-            - name: AIRFLOW__CORE__LOAD_EXAMPLES
-              value: "false"
-            - name: AIRFLOW__CORE__EXECUTOR
-              value: LocalExecutor
-            - name: AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS
-              value: admin:admin
-            - name: AIRFLOW__API__BASE_URL
-              value: http://airflow.airflow.svc.cluster.local:8080
-            - name: MLFLOW_TRACKING_URI
-              value: http://mlflow.mlflow.svc.cluster.local:5000
-            - name: MLFLOW_DISABLE_AGENT_HINT
-              value: "1"
-            - name: PROMETHEUS_PUSHGATEWAY_URL
-              value: http://prometheus-pushgateway.monitoring.svc.cluster.local:9091
-            - name: REDIS_CONNECTION_STRING
-              value: {{ required "platform.airflow.redisConnectionString is required" .Values.platform.airflow.redisConnectionString | quote }}
-            - name: AIRBNB_RAW_DATA_PATH
-              value: /opt/airflow/input/AB_NYC_2019.csv
-            - name: AIRBNB_FEATURE_DATA_PATH
-              value: /opt/airflow/work/listing_features.parquet
-            - name: AIRBNB_FEATURE_REPO_PATH
-              value: /opt/airflow/feature_repo
-            - name: AIRBNB_VERIFY_SCRIPT_PATH
-              value: /app/scripts/verify_feature_store.py
-            - name: AIRBNB_SNAPSHOT_ROOT
-              value: /opt/airflow/data-snapshots
-            - name: AIRBNB_SNAPSHOT_S3_URI
-              value: {{ printf "s3://%s/snapshots" (required "platform.airflow.dataBucket is required" .Values.platform.airflow.dataBucket) | quote }}
+            - secretRef:
+                name: airflow-runtime
+          {{- if eq $component "api-server" }}
           ports:
             - name: http
               containerPort: 8080
-          readinessProbe:
-            tcpSocket:
-              port: http
-            initialDelaySeconds: 30
+          {{- end }}
+          startupProbe:
+            {{- include "airbnb.airflowProbe" $component | nindent 12 }}
             periodSeconds: 10
-          livenessProbe:
-            tcpSocket:
-              port: http
-            initialDelaySeconds: 90
+            timeoutSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            {{- include "airbnb.airflowProbe" $component | nindent 12 }}
             periodSeconds: 20
+            timeoutSeconds: 10
+          livenessProbe:
+            {{- include "airbnb.airflowProbe" $component | nindent 12 }}
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
           resources:
-            {{- toYaml .Values.platform.airflow.resources | nindent 12 }}
+            {{- if eq $component "scheduler" }}
+            {{- toYaml $airflow.resources | nindent 12 }}
+            {{- else }}
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+            {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
-              drop: ["ALL"]
+              drop: [ALL]
           volumeMounts:
             - name: airflow-data
               mountPath: /opt/airflow
+      {{- end }}
       nodeSelector:
         workload: training
       tolerations:
@@ -152,8 +196,9 @@ apiVersion: v1
 kind: Service
 metadata:
   name: airflow
-  namespace: {{ .Values.platform.airflow.namespace }}
+  namespace: {{ $airflow.namespace }}
 spec:
+  type: ClusterIP
   selector:
     app.kubernetes.io/name: airflow
   ports:

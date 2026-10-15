@@ -2,19 +2,20 @@
 
 ## Selected mechanism
 
-This repository uses Argo Rollouts with AWS Application Load Balancer traffic
+This repository uses Argo Rollouts with Traefik weighted traffic
 routing. It is the direct progressive-delivery extension to the existing Argo
 CD and EKS design:
 
 - Argo CD installs and reconciles the Argo Rollouts controller and CRDs;
 - the existing `airbnb-inference` Service is the stable service;
 - `airbnb-inference-canary` selects only the new ReplicaSet during rollout;
-- Argo Rollouts updates ALB routing weights without changing stable selectors;
+- Argo Rollouts updates TraefikService routing weights without changing stable selectors;
 - Prometheus analysis aborts bad revisions before stable is promoted.
 
-The cluster must have AWS Load Balancer Controller installed with permissions to
-manage the ALB. Production values must replace the ECR, ACM certificate, and DNS
-placeholders before merge.
+AWS Load Balancer Controller provisions Traefik's public NLB. cert-manager issues
+and renews the TLS Secret used by the Traefik IngressRoute. ExternalDNS publishes
+the hostname from Traefik's LoadBalancer Service. Production values must replace
+the ECR and platform placeholders before merge.
 
 ## Rollout policy
 

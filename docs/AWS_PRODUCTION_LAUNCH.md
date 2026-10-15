@@ -63,8 +63,8 @@ branch restrictions. Do not store AWS access keys in GitHub.
 
 ## 3. DNS delegation
 
-Account `655916164714` did not contain the previously configured hosted zone.
-The production root therefore creates the public zone by default. Create just
+Production uses `platf0rm.site` itself for the application and HTTPS certificate.
+The production root creates its Route 53 public zone by default. Create just
 the zone first:
 
 ```sh
@@ -96,7 +96,7 @@ The production apply creates:
 - separate Multi-AZ PostgreSQL instances for MLflow and Airflow, with RDS-managed credentials, backups, final snapshots, and deletion protection;
 - Multi-AZ encrypted ElastiCache Redis for Feast;
 - a versioned, TLS-only, S3 Object-Locked data and artifact bucket;
-- ACM and Route 53 resources; and
+- Route 53 resources (cert-manager manages HTTPS certificates in Kubernetes); and
 - least-privilege EKS Pod Identity associations for workloads and controllers.
 
 Render the non-secret AWS endpoints and ARNs into the GitOps values:
@@ -107,6 +107,18 @@ uv run python scripts/render_aws_deployment_values.py
 
 Review and commit the resulting Helm values. The renderer never reads or
 writes database passwords.
+
+The renderer obtains each database's host, port, and name from Terraform outputs;
+External Secrets reads only `username` and `password` from RDS-managed secrets.
+Database connections require TLS. Feast uses the AWS-specific
+`feature_store.aws.yaml`, which selects `redis_cluster` and the Feast connection
+format `endpoint:6379,ssl=true` (not a Redis URL).
+
+External Secrets refreshes database credentials every five minutes. Reloader
+restarts the annotated MLflow and Airflow deployments when those Secrets change,
+so RDS-managed password rotation reaches processes that consume environment
+variables. Airflow's single-pod topology briefly interrupts scheduling during a
+restart; time rotations accordingly and verify the component probes recover.
 
 ## 5. Seed data and publish images
 
@@ -122,6 +134,17 @@ Push the rendered values, then run `Publish immutable images and propose
 GitOps promotion` manually from GitHub Actions. It scans both images, pushes only `sha-<git-sha>` tags to
 the Terraform-created ECR repositories, and opens a promotion pull request.
 Merge that pull request only after CI succeeds.
+
+The publishing workflow checks the complete values file and verifies both tags
+in ECR before creating the promotion PR. Run the same launch preflight locally:
+
+```sh
+uv run python scripts/validate_aws_deployment.py --check-images
+```
+
+Production child Applications enable a Helm launch gate that refuses unresolved
+coordinates and placeholder images. Offline CI rendering leaves the gate disabled
+so templates can be validated before AWS provisioning.
 
 ## 6. Bootstrap GitOps
 
@@ -149,7 +172,36 @@ Balancer Controller, ExternalDNS, Metrics Server, Cluster Autoscaler,
 kube-prometheus-stack, Pushgateway, MLflow, Airflow, and the inference
 Rollout.
 
+HTTPS uses Traefik behind an internet-facing NLB. cert-manager installs its CRDs
+and issues the inference Certificate through a namespaced Let's Encrypt Issuer
+using HTTP-01 and the `traefik` ingress class. ExternalDNS publishes the hostname
+from the Traefik LoadBalancer Service. Delegate the Route 53 zone and allow public
+ports 80 and 443 before issuance. Traefik redirects ordinary HTTP requests to HTTPS;
+the redirect has low priority so temporary ACME challenge routes take precedence.
+Sync the AWS load balancer controller, cert-manager, and Traefik before inference.
+Verify `kubectl -n airbnb-inference get certificate,issuer,order,challenge` and wait
+for the Certificate to become Ready before launching. For testing, set
+`ingress.acmeServer=https://acme-staging-v02.api.letsencrypt.org/directory`; staging
+certificates are not browser-trusted. No ACM certificate is needed.
+
 ## 7. Create the first governed champion
+
+Airflow runs API server, scheduler, DAG processor, and triggerer in separate
+containers in one pod, using LocalExecutor and the shared RWO data volume. The
+single pod uses Recreate upgrades and is not a highly available Airflow topology.
+Production therefore keeps one on-demand training node. Component-specific startup
+and health probes supervise each process; database and FAB migrations run first.
+DAGs start paused so monitoring workflows are enabled only after their production
+feature/outcome files are supplied in `/opt/airflow/input`.
+
+The FAB auth manager provides database-backed user login; the API remains internal.
+External Secrets generates persistent runtime signing/encryption keys and a random
+initial admin password in the `airflow-runtime` Secret. Retrieve that password using
+an approved secret access path; never commit or copy it into logs. Back up this
+Secret securely with database backups: losing the Fernet key prevents decrypting
+stored Airflow connections. Reset user passwords through FAB rather than deleting
+the runtime Secret. The initial admin identity can be configured with
+`platform.airflow.adminUsername` and `platform.airflow.adminEmail`.
 
 The production MLflow registry starts empty. Port-forward Airflow or use an
 approved internal access path, trigger `airbnb_feature_build`, and then trigger

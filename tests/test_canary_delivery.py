@@ -62,7 +62,7 @@ def test_rollout_starts_small_and_passing_canary_reaches_full_traffic(
     assert weights == [5, 25, 50, 100]
     assert canary["stableService"] == "airbnb-inference"
     assert canary["canaryService"] == "airbnb-inference-canary"
-    assert canary["trafficRouting"]["alb"]["ingress"] == "airbnb-inference"
+    assert canary["trafficRouting"]["traefik"]["weightedTraefikServiceName"] == "airbnb-inference"
 
 
 def test_failed_analysis_aborts_without_retargeting_stable_service(
@@ -96,3 +96,26 @@ def test_hpa_targets_rollout_not_removed_deployment(
         "kind": "Rollout",
         "name": "airbnb-inference",
     }
+
+
+def test_https_uses_cert_manager_secret_and_traefik(
+    rendered_resources: list[dict[str, Any]],
+) -> None:
+    """Connect ACME issuance, TLS termination, and canary traffic routing."""
+    LOGGER.info("Checking rendered certificate and TLS routing")
+    certificate = _resource(rendered_resources, "Certificate", "airbnb-inference")
+    issuer = _resource(rendered_resources, "Issuer", "letsencrypt")
+    route = _resource(rendered_resources, "IngressRoute", "airbnb-inference")
+    weighted = _resource(rendered_resources, "TraefikService", "airbnb-inference")
+    assert certificate["spec"]["dnsNames"] == ["platf0rm.site"]
+    assert route["spec"]["routes"][0]["match"] == "Host(`platf0rm.site`)"
+    bootstrap = yaml.safe_load((CHART_PATH / "values/bootstrap.yaml").read_text(encoding="utf-8"))
+    assert bootstrap["addons"]["externalDns"]["values"]["domainFilters"] == ["platf0rm.site"]
+    assert bootstrap["addons"]["traefik"]["values"]["service"]["annotations"]["external-dns.alpha.kubernetes.io/hostname"] == "platf0rm.site"
+    assert certificate["spec"]["issuerRef"]["name"] == issuer["metadata"]["name"]
+    assert route["spec"]["tls"]["secretName"] == certificate["spec"]["secretName"]
+    assert issuer["spec"]["acme"]["solvers"][0]["http01"]["ingress"]["ingressClassName"] == "traefik"
+    assert route["spec"]["routes"][0]["services"][0]["kind"] == "TraefikService"
+    assert [service["name"] for service in weighted["spec"]["weighted"]["services"]] == [
+        "airbnb-inference", "airbnb-inference-canary"
+    ]

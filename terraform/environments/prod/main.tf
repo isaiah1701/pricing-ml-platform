@@ -95,13 +95,10 @@ module "vpc" {
 module "route53" {
   source = "../../modules/route-53"
 
-  create_hosted_zone                    = var.create_route53_hosted_zone
-  hosted_zone_name                      = var.domain_name
-  hosted_zone_id                        = var.route53_hosted_zone_id
-  create_certificate                    = true
-  certificate_domain_name               = var.domain_name
-  certificate_subject_alternative_names = ["*.${var.domain_name}"]
-  tags                                  = local.common_tags
+  create_hosted_zone = var.create_route53_hosted_zone
+  hosted_zone_name   = var.domain_name
+  hosted_zone_id     = var.route53_hosted_zone_id
+  tags               = local.common_tags
 }
 
 module "ecr" {
@@ -365,9 +362,17 @@ resource "aws_iam_role_policy" "airflow_data" {
   policy = data.aws_iam_policy_document.airflow_data.json
 }
 
+resource "aws_iam_policy" "load_balancer_controller" {
+  name        = "${local.name}-load-balancer-controller"
+  description = "Upstream AWS Load Balancer Controller v3.6.0 policy matching the pinned Helm chart"
+  # https://github.com/kubernetes-sigs/aws-load-balancer-controller/blob/v3.6.0/docs/install/iam_policy.json
+  policy = file("${path.module}/policies/aws-load-balancer-controller.json")
+  tags   = local.common_tags
+}
+
 resource "aws_iam_role_policy_attachment" "load_balancer_controller" {
   role       = aws_iam_role.pod_identity["aws_load_balancer_controller"].name
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEKSLoadBalancingPolicy"
+  policy_arn = aws_iam_policy.load_balancer_controller.arn
 }
 
 data "aws_iam_policy_document" "cluster_autoscaler" {

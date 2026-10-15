@@ -154,7 +154,6 @@ data "aws_iam_policy_document" "terraform_execution" {
     sid    = "ManageMlopsRegionalInfrastructure"
     effect = "Allow"
     actions = [
-      "acm:*",
       "ec2:*",
       "ecr:*",
       "eks:*",
@@ -163,6 +162,10 @@ data "aws_iam_policy_document" "terraform_execution" {
       "rds:*",
       "elasticache:*",
       "secretsmanager:*",
+      "autoscaling:CreateOrUpdateTags",
+      "autoscaling:DeleteTags",
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeTags",
     ]
 
     resources = ["*"]
@@ -325,7 +328,7 @@ data "aws_iam_policy_document" "terraform_execution" {
     condition {
       test     = "StringEquals"
       variable = "iam:PassedToService"
-      values   = ["eks.amazonaws.com"]
+      values   = ["eks.amazonaws.com", "ec2.amazonaws.com", "pods.eks.amazonaws.com"]
     }
   }
 
