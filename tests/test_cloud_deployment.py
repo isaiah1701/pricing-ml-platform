@@ -110,6 +110,19 @@ def test_airflow_runs_supervised_components_after_migrations(
         == "airflow-database,airflow-runtime"
     )
     assert pod["nodeSelector"] == {"workload": "system"}
+    config = next(
+        r
+        for r in platform
+        if r["kind"] == "ConfigMap" and r["metadata"]["name"] == "airflow-runtime"
+    )
+    assert config["data"]["AIRFLOW__API__WORKERS"] == "1"
+    mlflow = next(
+        r
+        for r in platform
+        if r["kind"] == "Deployment" and r["metadata"]["name"] == "mlflow"
+    )
+    arguments = mlflow["spec"]["template"]["spec"]["containers"][0]["args"]
+    assert arguments[arguments.index("--workers") + 1] == "1"
     migration, data = pod["initContainers"]
     assert "airflow db migrate" in migration["args"][0]
     assert "airflow fab-db migrate" in migration["args"][0]
