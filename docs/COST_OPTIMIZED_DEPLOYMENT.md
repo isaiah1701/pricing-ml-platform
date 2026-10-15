@@ -5,6 +5,10 @@ worker (2 vCPUs, 16 GiB RAM) in one Availability Zone. Serving, MLflow, Airflow,
 GitOps controllers, and monitoring share this node. Prefix delegation supports
 the controller pod count. Airflow runs one task at a time and native libraries
 use one thread to leave capacity for serving and cluster services.
+Airflow parses one DAG file at a time, allows 180 seconds for cold imports, and
+reparses files every five minutes. Component probes query recent database
+heartbeats without repeatedly importing the full Airflow CLI. MLflow has a
+cold-start probe allowance and does not overlap old/new instances during updates.
 
 The budget values use single replicas, fixed worker/serving capacity, two-day
 Prometheus retention, smaller persistent volumes, two single-AZ `db.t4g.micro`

@@ -116,12 +116,16 @@ def test_airflow_runs_supervised_components_after_migrations(
         if r["kind"] == "ConfigMap" and r["metadata"]["name"] == "airflow-runtime"
     )
     assert config["data"]["AIRFLOW__API__WORKERS"] == "1"
+    assert config["data"]["AIRFLOW__DAG_PROCESSOR__PARSING_PROCESSES"] == "1"
+    assert config["data"]["AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT"] == "180"
+    assert config["data"]["AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL"] == "300"
     mlflow = next(
         r
         for r in platform
         if r["kind"] == "Deployment" and r["metadata"]["name"] == "mlflow"
     )
     arguments = mlflow["spec"]["template"]["spec"]["containers"][0]["args"]
+    assert mlflow["spec"]["strategy"] == {"type": "Recreate", "rollingUpdate": None}
     assert arguments[arguments.index("--workers") + 1] == "1"
     assert (
         mlflow["spec"]["template"]["spec"]["containers"][0]["startupProbe"][

@@ -17,6 +17,7 @@ spec:
   replicas: {{ .Values.platform.mlflow.replicas }}
   strategy:
     type: Recreate
+    rollingUpdate: null
   selector:
     matchLabels:
       app.kubernetes.io/name: mlflow
