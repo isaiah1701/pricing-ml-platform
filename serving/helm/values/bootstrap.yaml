@@ -100,11 +100,12 @@ addons:
     enabled: true
     name: aws-load-balancer-controller
     namespace: kube-system
-    syncWave: "-3"
+    syncWave: "-2"
     chartRepo: https://aws.github.io/eks-charts
     chart: aws-load-balancer-controller
     chartVersion: 3.6.0
     values:
+      enableCertManager: true
       clusterName: prod-mlops-prod
       region: eu-west-2
       replicaCount: 1
