@@ -32,10 +32,23 @@ class Settings(BaseSettings):
     prediction_queue_timeout_seconds: float = Field(
         default=5.0, gt=0.0, le=60.0, validation_alias="PREDICTION_QUEUE_TIMEOUT_SECONDS"
     )
+    tracing_enabled: bool = Field(default=False, validation_alias="TRACING_ENABLED")
+    tracing_experiment_id: str = Field(
+        default="1", validation_alias="MLFLOW_TRACING_EXPERIMENT_ID"
+    )
+    otel_service_name: str = Field(
+        default="airbnb-inference", validation_alias="OTEL_SERVICE_NAME"
+    )
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
 
     @field_validator(
-        "mlflow_tracking_uri", "model_name", "model_alias", "log_level", mode="before"
+        "mlflow_tracking_uri",
+        "model_name",
+        "model_alias",
+        "tracing_experiment_id",
+        "otel_service_name",
+        "log_level",
+        mode="before",
     )
     @classmethod
     def reject_blank_values(cls, value: object) -> object:

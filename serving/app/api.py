@@ -15,6 +15,7 @@ from uuid import uuid4
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
+from opentelemetry.sdk.trace.export import SpanExporter
 from prometheus_client import (
     CollectorRegistry,
     Counter,
@@ -39,6 +40,7 @@ from serving.app.schemas import (
     PredictionResponse,
     ReadinessResponse,
 )
+from serving.app.tracing import configure_tracing, get_application_tracer
 
 LOGGER = logging.getLogger(__name__)
 DEMO_HTML_PATH = Path(__file__).with_name("demo.html")
@@ -135,6 +137,7 @@ def create_app(
     settings: Settings | None = None,
     model_loader: ModelLoader = load_champion_model,
     model_refresher: ModelRefresher = refresh_champion_model,
+    trace_exporter: SpanExporter | None = None,
 ) -> FastAPI:
     """Create an instrumented application with safe periodic model refresh."""
     runtime_settings = settings or get_settings()
@@ -214,18 +217,26 @@ def create_app(
         record_loaded_model(application, application.state.loaded_model)
         if runtime_settings.model_refresh_interval_seconds > 0:
             refresh_task = asyncio.create_task(refresh_loop(application))
-        yield
-        if refresh_task is not None:
-            refresh_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await refresh_task
-        LOGGER.info("Model-serving application stopped")
+        try:
+            yield
+        finally:
+            if refresh_task is not None:
+                refresh_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await refresh_task
+            tracer_provider = getattr(application.state, "tracer_provider", None)
+            if tracer_provider is not None:
+                tracer_provider.shutdown()
+            LOGGER.info("Model-serving application stopped")
 
     application = FastAPI(
         title="Airbnb Price Predictor",
         version="1.0.0",
         description="Serve one NYC listing using an MLflow Registry alias.",
         lifespan=lifespan,
+    )
+    application.state.tracer_provider = configure_tracing(
+        application, runtime_settings, exporter=trace_exporter
     )
 
     @application.get("/demo", response_class=FileResponse, include_in_schema=False)
@@ -297,14 +308,24 @@ def create_app(
                     headers={"Retry-After": "1"},
                 ) from None
             metrics.prediction_inflight.inc()
-            frame = listing.to_model_frame()
-            raw_prediction = await asyncio.to_thread(loaded.predict, frame)
-            values = np.asarray(raw_prediction).reshape(-1)
-            if len(values) != 1:
-                raise ValueError("model did not return exactly one value")
-            predicted_price = float(values[0])
-            if not np.isfinite(predicted_price) or predicted_price < 0.0:
-                raise ValueError("model returned an invalid price")
+            tracer = get_application_tracer(request.app)
+            with tracer.start_as_current_span(
+                "model.predict",
+                attributes={
+                    "mlflow.spanType": "MODEL",
+                    "model.name": runtime_settings.model_name,
+                    "model.alias": runtime_settings.model_alias,
+                    "model.version": loaded.version,
+                },
+            ):
+                frame = listing.to_model_frame()
+                raw_prediction = await asyncio.to_thread(loaded.predict, frame)
+                values = np.asarray(raw_prediction).reshape(-1)
+                if len(values) != 1:
+                    raise ValueError("model did not return exactly one value")
+                predicted_price = float(values[0])
+                if not np.isfinite(predicted_price) or predicted_price < 0.0:
+                    raise ValueError("model returned an invalid price")
         except HTTPException:
             raise
         except Exception:

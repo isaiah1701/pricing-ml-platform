@@ -67,6 +67,10 @@ mlflow:
   trackingUri: http://mlflow.mlflow.svc.cluster.local:5000
   modelName: airbnb-price-predictor
   modelAlias: champion
+  tracing:
+    enabled: true
+    experimentId: "1"
+    serviceName: airbnb-inference
 
 logLevel: INFO
 existingSecret: ""

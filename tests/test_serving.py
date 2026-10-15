@@ -11,6 +11,9 @@ import numpy as np
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+    InMemorySpanExporter,
+)
 
 from serving.app.api import create_app
 from serving.app.config import Settings
@@ -269,3 +272,46 @@ def test_prediction_failure_is_counted(
     assert "airbnb_prediction_failures_total 1.0" in metrics
     assert "airbnb_prediction_latency_seconds_count 1.0" in metrics
     assert "airbnb_predicted_price_dollars_count 0.0" in metrics
+
+
+def test_predict_exports_http_and_model_spans_without_request_payload(
+    fake_model: FakePriceModel,
+    listing_payload: dict[str, object],
+) -> None:
+    """Export correlated request and inference spans without sensitive features."""
+    exporter = InMemorySpanExporter()
+    tracing_settings = Settings(
+        MLFLOW_TRACKING_URI="http://mlflow.test:5000",
+        MODEL_NAME="test-airbnb-model",
+        MODEL_ALIAS="candidate",
+        MODEL_REFRESH_INTERVAL_SECONDS=0,
+        TRACING_ENABLED=True,
+        MLFLOW_TRACING_EXPERIMENT_ID="1",
+        OTEL_SERVICE_NAME="test-airbnb-inference",
+        LOG_LEVEL="WARNING",
+    )
+    app = create_app(
+        settings=tracing_settings,
+        model_loader=successful_loader(fake_model),
+        trace_exporter=exporter,
+    )
+    with TestClient(app) as client:
+        response = client.post("/predict", json=listing_payload)
+
+    assert response.status_code == 200
+    spans = exporter.get_finished_spans()
+    request_span = next(span for span in spans if span.name == "POST /predict")
+    model_span = next(span for span in spans if span.name == "model.predict")
+    assert model_span.parent is not None
+    assert model_span.parent.span_id == request_span.context.span_id
+    assert model_span.attributes == {
+        "mlflow.spanType": "MODEL",
+        "model.name": "test-airbnb-model",
+        "model.alias": "candidate",
+        "model.version": "unknown",
+    }
+    serialized_attributes = repr(
+        [dict(span.attributes or {}) for span in spans]
+    )
+    assert "Midtown" not in serialized_attributes
+    assert "40.758" not in serialized_attributes
