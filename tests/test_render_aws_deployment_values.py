@@ -121,6 +121,12 @@ def test_render_values_updates_workload_and_controller_coordinates(
     assert bootstrap["addons"]["externalDns"]["values"]["domainFilters"] == [
         "example.com"
     ]
+    assert (
+        bootstrap["addons"]["traefik"]["values"]["service"]["annotations"][
+            "external-dns.kubernetes.io/hostname"
+        ]
+        == "prices.example.com,grafana.example.com,mlflow.example.com"
+    )
     sns_config = bootstrap["addons"]["monitoring"]["values"]["alertmanager"][
         "config"
     ]["receivers"][0]["sns_configs"][0]

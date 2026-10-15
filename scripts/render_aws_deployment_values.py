@@ -148,9 +148,14 @@ def render_values(
 
     bootstrap = _load_yaml(bootstrap_values_path)
     addons = bootstrap["addons"]
+    public_hostnames = (
+        coordinates["application_hostname"],
+        f"grafana.{coordinates['domain_name']}",
+        f"mlflow.{coordinates['domain_name']}",
+    )
     addons["traefik"]["values"]["service"]["annotations"][
         "external-dns.kubernetes.io/hostname"
-    ] = coordinates["application_hostname"]
+    ] = ",".join(dict.fromkeys(public_hostnames))
     addons["awsLoadBalancerController"]["values"]["clusterName"] = coordinates[
         "cluster_name"
     ]
