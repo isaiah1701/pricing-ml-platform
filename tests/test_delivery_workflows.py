@@ -3,12 +3,42 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 from pathlib import Path
 
 import yaml
 
 LOGGER = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_image_promotion_passes_expression_and_filename_to_yq() -> None:
+    """Check the folded YAML command preserves the expression and file arguments."""
+    LOGGER.info("Validating the image-promotion shell argument boundaries")
+    configuration = yaml.load(
+        (PROJECT_ROOT / ".github/workflows/publish-images.yml").read_text(),
+        Loader=yaml.BaseLoader,
+    )
+    step = next(
+        step
+        for step in configuration["jobs"]["publish-production"]["steps"]
+        if step.get("name") == "Update environment values only"
+    )
+    command = step["with"]["cmd"]
+    for field in ("serving", "training", "tag"):
+        command = command.replace("${{ steps.images.outputs." + field + " }}", field)
+    result = subprocess.run(
+        [
+            "bash",
+            "-ec",
+            'yq() { test "$#" -eq 3 && test "$3" = "serving/helm/values/production.yaml"; }; '
+            + command,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_validation_workflow_checks_all_required_surfaces() -> None:
@@ -52,9 +82,7 @@ def test_publish_workflow_is_oidc_immutable_and_gitops_only() -> None:
 def test_gitops_requires_manual_sync_before_launch() -> None:
     """Prevent repository pushes from enabling automatic cluster reconciliation."""
     values = yaml.safe_load(
-        (PROJECT_ROOT / "serving" / "helm" / "values.yaml").read_text(
-            encoding="utf-8"
-        )
+        (PROJECT_ROOT / "serving" / "helm" / "values.yaml").read_text(encoding="utf-8")
     )
     root_application = yaml.safe_load(
         (PROJECT_ROOT / "serving" / "argocd" / "root-application.yaml").read_text(
