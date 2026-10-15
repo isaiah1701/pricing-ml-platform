@@ -23,6 +23,28 @@ to worker compute. This profile reduces cost within the existing EKS design;
 it does not turn EKS into a free-tier service. Keep datasets and backups before
 tearing down a learning session.
 
+At AWS public on-demand London rates checked through the AWS Pricing API on
+2026-10-15, 730 hours/month is approximately $291 in baseline resources, or
+roughly $300/month before tax and variable usage. This is not a billing cap:
+
+| Resource | Approximate USD/month |
+| --- | ---: |
+| One r5a.large worker | 97.09 |
+| Standard-support EKS control plane | 73.00 |
+| One NAT gateway (hourly only) | 36.50 |
+| Two db.t4g.micro PostgreSQL instances | 26.28 |
+| One cache.t4g.micro Redis node | 13.14 |
+| Network Load Balancer (hourly only) | 19.32 |
+| 93 GiB gp3 worker/PVC storage | 8.63 |
+| 40 GiB RDS gp3 storage | 5.32 |
+| Three public IPv4 addresses | 10.95 |
+| One Route 53 hosted zone | 0.50 |
+
+NAT data processing, NLB capacity units, transfer, DNS queries, S3/ECR storage,
+CloudWatch logs, KMS, Secrets Manager, backups beyond allowances, and any CPU
+surplus credits are additional. Credits, discounts, and actual month length
+change the bill. Rates and active resources should be rechecked before reuse.
+
 Setting `cost_optimized=false` restores the dedicated Terraform topology; Helm
 replicas, scheduling, and resources must also be raised and aligned before
 returning to a high-availability deployment.
