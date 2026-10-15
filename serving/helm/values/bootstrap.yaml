@@ -1,27 +1,22 @@
 bootstrap:
   enabled: true
-
 workload:
   enabled: false
-
 git:
-  repoURL: "https://github.com/isaiah1701/prod-mlops-platform.git"
+  repoURL: https://github.com/isaiah1701/prod-mlops-platform.git
   targetRevision: main
   chartPath: serving/helm
-
 project:
   name: prod-mlops
-
 destination:
   server: https://kubernetes.default.svc
   namespace: airbnb-inference
-
 addons:
   reloader:
     enabled: true
     name: reloader
     namespace: kube-system
-    syncWave: "-3"
+    syncWave: '-3'
     chartRepo: https://stakater.github.io/stakater-charts
     chart: reloader
     chartVersion: 2.2.18
@@ -30,15 +25,18 @@ addons:
         reloadStrategy: annotations
         deployment:
           resources:
-            requests: {cpu: 10m, memory: 32Mi}
-            limits: {memory: 128Mi}
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
           nodeSelector:
             workload: system
   certManager:
     enabled: true
     name: cert-manager
     namespace: cert-manager
-    syncWave: "-3"
+    syncWave: '-3'
     chartRepo: https://charts.jetstack.io
     chart: cert-manager
     chartVersion: v1.21.2
@@ -46,23 +44,32 @@ addons:
       crds:
         enabled: true
       resources:
-        requests: {cpu: 10m, memory: 64Mi}
-        limits: {memory: 256Mi}
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          memory: 256Mi
       webhook:
         resources:
-          requests: {cpu: 10m, memory: 32Mi}
-          limits: {memory: 128Mi}
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 128Mi
       cainjector:
         resources:
-          requests: {cpu: 10m, memory: 64Mi}
-          limits: {memory: 256Mi}
+          requests:
+            cpu: 10m
+            memory: 64Mi
+          limits:
+            memory: 256Mi
       nodeSelector:
         workload: system
   traefik:
     enabled: true
     name: traefik
     namespace: traefik
-    syncWave: "-2"
+    syncWave: '-2'
     chartRepo: https://traefik.github.io/charts
     chart: traefik
     chartVersion: 41.7.1
@@ -70,8 +77,11 @@ addons:
       deployment:
         replicas: 1
       resources:
-        requests: {cpu: 50m, memory: 96Mi}
-        limits: {memory: 256Mi}
+        requests:
+          cpu: 50m
+          memory: 96Mi
+        limits:
+          memory: 256Mi
       nodeSelector:
         workload: system
       providers:
@@ -100,7 +110,7 @@ addons:
     enabled: true
     name: aws-load-balancer-controller
     namespace: kube-system
-    syncWave: "-2"
+    syncWave: '-2'
     chartRepo: https://aws.github.io/eks-charts
     chart: aws-load-balancer-controller
     chartVersion: 3.6.0
@@ -110,8 +120,11 @@ addons:
       region: eu-west-2
       replicaCount: 1
       resources:
-        requests: {cpu: 50m, memory: 128Mi}
-        limits: {memory: 256Mi}
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          memory: 256Mi
       serviceAccount:
         create: true
         name: aws-load-balancer-controller
@@ -119,20 +132,23 @@ addons:
     enabled: true
     name: metrics-server
     namespace: kube-system
-    syncWave: "-3"
+    syncWave: '-3'
     chartRepo: https://kubernetes-sigs.github.io/metrics-server/
     chart: metrics-server
     chartVersion: 3.14.0
     values:
       replicas: 1
       resources:
-        requests: {cpu: 50m, memory: 96Mi}
-        limits: {memory: 256Mi}
+        requests:
+          cpu: 50m
+          memory: 96Mi
+        limits:
+          memory: 256Mi
   clusterAutoscaler:
     enabled: false
     name: cluster-autoscaler
     namespace: kube-system
-    syncWave: "-3"
+    syncWave: '-3'
     chartRepo: https://kubernetes.github.io/autoscaler
     chart: cluster-autoscaler
     chartVersion: 9.59.0
@@ -145,14 +161,14 @@ addons:
           create: true
           name: cluster-autoscaler
       extraArgs:
-        balance-similar-node-groups: "true"
+        balance-similar-node-groups: 'true'
         expander: least-waste
-        skip-nodes-with-system-pods: "false"
+        skip-nodes-with-system-pods: 'false'
   externalDns:
     enabled: true
     name: external-dns
     namespace: kube-system
-    syncWave: "-3"
+    syncWave: '-3'
     chartRepo: https://kubernetes-sigs.github.io/external-dns/
     chart: external-dns
     chartVersion: 1.23.0
@@ -163,10 +179,13 @@ addons:
       registry: txt
       txtOwnerId: prod-mlops-prod
       domainFilters:
-        - platf0rm.site
+      - platf0rm.site
       resources:
-        requests: {cpu: 10m, memory: 64Mi}
-        limits: {memory: 256Mi}
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          memory: 256Mi
       serviceAccount:
         create: true
         name: external-dns
@@ -174,7 +193,7 @@ addons:
     enabled: true
     name: kube-prometheus-stack
     namespace: monitoring
-    syncWave: "-2"
+    syncWave: '-2'
     chartRepo: https://prometheus-community.github.io/helm-charts
     chart: kube-prometheus-stack
     chartVersion: 92.3.0
@@ -182,8 +201,11 @@ addons:
       grafana:
         enabled: true
         resources:
-          requests: {cpu: 25m, memory: 128Mi}
-          limits: {memory: 384Mi}
+          requests:
+            cpu: 25m
+            memory: 128Mi
+          limits:
+            memory: 384Mi
         sidecar:
           dashboards:
             enabled: true
@@ -192,8 +214,11 @@ addons:
         prometheusSpec:
           retention: 2d
           resources:
-            requests: {cpu: 100m, memory: 512Mi}
-            limits: {memory: 1Gi}
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
           serviceMonitorSelectorNilUsesHelmValues: false
           podMonitorSelectorNilUsesHelmValues: false
           nodeSelector:
@@ -202,7 +227,8 @@ addons:
             volumeClaimTemplate:
               spec:
                 storageClassName: gp3
-                accessModes: [ReadWriteOnce]
+                accessModes:
+                - ReadWriteOnce
                 resources:
                   requests:
                     storage: 10Gi
@@ -210,35 +236,48 @@ addons:
         enabled: true
         alertmanagerSpec:
           resources:
-            requests: {cpu: 10m, memory: 64Mi}
-            limits: {memory: 128Mi}
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
           nodeSelector:
             workload: system
           storage:
             volumeClaimTemplate:
               spec:
                 storageClassName: gp3
-                accessModes: [ReadWriteOnce]
+                accessModes:
+                - ReadWriteOnce
                 resources:
                   requests:
                     storage: 2Gi
       prometheusOperator:
         resources:
-          requests: {cpu: 25m, memory: 96Mi}
-          limits: {memory: 256Mi}
+          requests:
+            cpu: 25m
+            memory: 96Mi
+          limits:
+            memory: 256Mi
       kube-state-metrics:
         resources:
-          requests: {cpu: 10m, memory: 64Mi}
-          limits: {memory: 192Mi}
+          requests:
+            cpu: 10m
+            memory: 64Mi
+          limits:
+            memory: 192Mi
       prometheus-node-exporter:
         resources:
-          requests: {cpu: 10m, memory: 32Mi}
-          limits: {memory: 128Mi}
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 128Mi
   pushgateway:
     enabled: true
     name: prometheus-pushgateway
     namespace: monitoring
-    syncWave: "-2"
+    syncWave: '-2'
     chartRepo: https://prometheus-community.github.io/helm-charts
     chart: prometheus-pushgateway
     chartVersion: 3.9.1
@@ -253,7 +292,10 @@ addons:
         size: 1Gi
         storageClass: gp3
       resources:
-        requests: {cpu: 10m, memory: 32Mi}
-        limits: {memory: 128Mi}
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi
       nodeSelector:
         workload: system
