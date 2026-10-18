@@ -54,8 +54,8 @@ k6 run tests/k6/smoke.js
 The fixture returns a fixed price and model version `local-fixture`. It exercises
 the actual request validation, queue and HTTP response path. It does **not**
 measure CatBoost inference, registry restoration or production performance.
-`.github/workflows/k6.yml` runs only this one-user local smoke. Baseline and burst
-must be run manually against an approved local/test environment.
+k6 has no GitHub Actions workflow. Smoke, baseline and burst runs are manual
+against an approved local/test environment. CI retains payload-schema checks.
 
 The earlier `load-tests/` files remain preserved; use this directory for the
 expanded reproducible suite and CI integration.

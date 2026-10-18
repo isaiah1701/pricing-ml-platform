@@ -425,6 +425,7 @@ def conditional_registration(candidate: LoggedCandidate) -> dict[str, str]:
     version = mlflow.register_model(candidate["model_uri"], REGISTERED_MODEL_NAME)
     client = MlflowClient()
     provenance_tags = {
+        "promotion_status": "approved",
         "release_bundle_id": candidate["release_bundle_id"],
         "training_attempt_id": candidate["training_attempt_id"],
         "mlflow_run_id": candidate["run_id"],

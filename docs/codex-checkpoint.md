@@ -1,5 +1,32 @@
 # CI/CD refactor checkpoint
 
+## Active brief: complete CI/CD and GitOps bootstrap
+
+- Resume point: Phase A complete in this milestone commit (resolve with
+  `git log --oneline --grep='finish independent ML and platform workflows'`).
+- Exactly seven entry workflows: ML Data, ML Training, ML Deploy, Docker,
+  Kubernetes, Terraform Plan and Terraform Apply. Removed k6 and consolidated
+  general Python checks into Docker so Bootstrap will be the eighth workflow.
+- Terraform handoff checks trusted run/commit/backend/provider lock/version,
+  plan checksum/age, protected manual Apply and shared concurrency; no replanning.
+- ML Deploy verifies/selects already approved versions via a manual Airflow DAG,
+  preserves rollback, checks artifact bytes/provenance, and reuses Kubernetes.
+  Initial gated registrations now carry promotion_status=approved. Docker runtime
+  includes the model metadata modules required by the deployment DAG.
+- Validation: **162 tests passed**, 14 dependency warnings; Ruff, actionlint and
+  production Helm lint passed. Cloud paths mocked; no AWS mutation, actual model
+  promotion, image build/push, deployment, full training or production load.
+- Previously committed training checkpoint support: `d52c838`; verified native
+  interrupted-fit resume plus completed-member reuse. S3 recovery remains
+  independent of checkpoints/RDS snapshots (`8341b87`).
+- Next: Phase B — inspect existing ownership, add manual Bootstrap with Helmfile
+  and focused offline tests; then Phase C integration/remaining hardening.
+- Prerequisites remain unverified: actual protected environment reviewers,
+  role permissions/OIDC, private runner reachability, Airflow bearer token,
+  existing Terraform backend/inputs, and one-time approved-model S3 export.
+- Preserve unrelated `README.md`, `load-tests/`, `skills/`. Do not push or run
+  live apply/bootstrap/deployment/autoscaling/model training/load tests.
+
 ## Follow-up: training checkpoints and workflow separation
 
 - User requested resumable training, removal of the k6 workflow, exactly three ML

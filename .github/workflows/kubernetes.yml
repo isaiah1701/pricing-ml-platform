@@ -1,0 +1,100 @@
+name: Kubernetes
+on:
+  pull_request:
+    paths: [serving/helm/**, serving/argocd/**, monitoring/grafana/**, monitoring/prometheus/**, scripts/sync_gitops.py, .github/workflows/kubernetes.yml]
+  push:
+    branches: [main]
+    paths: [serving/helm/**, serving/argocd/**, monitoring/grafana/**, monitoring/prometheus/**, scripts/sync_gitops.py, .github/workflows/kubernetes.yml]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Sync the selected existing Argo application
+        type: boolean
+        default: false
+      application:
+        type: choice
+        options: [airbnb-inference, airbnb-platform, prod-mlops-bootstrap]
+        default: airbnb-inference
+  workflow_call:
+    inputs:
+      deploy:
+        type: boolean
+        default: false
+      application:
+        type: string
+        default: airbnb-inference
+    outputs:
+      deployed:
+        value: ${{ jobs.deploy.outputs.deployed }}
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  manifests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: azure/setup-helm@bf6a7d304bc2fdb57e0331155b7ebf2c504acf0a # v4
+      - name: Lint and render workload
+        run: |
+          helm lint serving/helm
+          helm lint serving/helm -f serving/helm/values/base.yaml
+          helm lint serving/helm \
+            -f serving/helm/values/base.yaml \
+            -f serving/helm/values/production.yaml
+          helm template airbnb-inference serving/helm \
+            --namespace airbnb-inference \
+            -f serving/helm/values/base.yaml \
+            -f serving/helm/values/production.yaml > rendered-workload.yaml
+          helm template airbnb-platform serving/helm \
+            --namespace mlflow \
+            -f serving/helm/values/base.yaml \
+            -f serving/helm/values/production.yaml \
+            --set workload.enabled=false \
+            --set platform.enabled=true > rendered-platform.yaml
+      - name: Render bootstrap resources
+        run: |
+          helm template prod-mlops-bootstrap serving/helm \
+            --namespace argocd \
+            -f serving/helm/values/bootstrap.yaml > rendered-bootstrap.yaml
+      - name: Validate Kubernetes schemas
+        run: |
+          docker run --rm -v "$PWD:/work" ghcr.io/yannh/kubeconform:v0.6.7 \
+            -strict -summary -ignore-missing-schemas /work/rendered-workload.yaml
+          docker run --rm -v "$PWD:/work" ghcr.io/yannh/kubeconform:v0.6.7 \
+            -strict -summary -ignore-missing-schemas /work/rendered-bootstrap.yaml
+          docker run --rm -v "$PWD:/work" ghcr.io/yannh/kubeconform:v0.6.7 \
+            -strict -summary -ignore-missing-schemas /work/rendered-platform.yaml
+
+  deploy:
+    needs: manifests
+    if: ${{ inputs.deploy && github.ref == 'refs/heads/main' && vars.K8S_DEPLOY_ENABLED == 'true' }}
+    environment: production
+    runs-on: ${{ vars.EKS_RUNNER_LABEL || 'ubuntu-24.04' }}
+    timeout-minutes: 30
+    concurrency:
+      group: kubernetes-production
+      cancel-in-progress: false
+    outputs:
+      deployed: ${{ steps.sync.outputs.deployed }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_EKS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-2' }}
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: ${{ vars.KUBECTL_VERSION || 'v1.35.0' }}
+      - name: Configure the existing EKS context
+        env:
+          CLUSTER: ${{ vars.EKS_CLUSTER_NAME || 'prod-mlops-prod' }}
+          REGION: ${{ vars.AWS_REGION || 'eu-west-2' }}
+        run: aws eks update-kubeconfig --name "$CLUSTER" --region "$REGION"
+      - name: Sync the reviewed Git revision through Argo
+        id: sync
+        env:
+          ARGO_APPLICATION: ${{ inputs.application }}
+        run: |
+          python scripts/sync_gitops.py
+          echo 'deployed=true' >> "$GITHUB_OUTPUT"

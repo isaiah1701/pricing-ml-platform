@@ -33,6 +33,7 @@ COPY --link --chown=10001:10001 pipelines ./pipelines
 COPY --link --chown=10001:10001 serving/__init__.py ./serving/__init__.py
 COPY --link --chown=10001:10001 serving/app/__init__.py ./serving/app/__init__.py
 COPY --link --chown=10001:10001 serving/app/schemas.py ./serving/app/schemas.py
+COPY --link --chown=10001:10001 serving/app/config.py serving/app/model_loader.py ./serving/app/
 COPY --link --chown=10001:10001 feature_repo ./feature_repo
 COPY --link --chown=10001:10001 scripts ./scripts
 USER 10001:10001

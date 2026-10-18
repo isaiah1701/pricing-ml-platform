@@ -36,41 +36,26 @@ traffic before analysis.
 
 ## Continuous validation
 
-`.github/workflows/validate.yml` performs only read-only validation:
+The validation is split by responsibility:
 
-1. installs locked Python dependencies, lints every Python file, and runs all tests;
-2. builds the serving image without pushing it;
-3. lints default, base, production, and bootstrap Helm configurations;
-4. renders workload/bootstrap manifests and validates them with kubeconform; and
-5. runs `terraform fmt -check`, backend-disabled `terraform init`, and
-   `terraform validate` for dev, staging, and prod.
+- `docker.yml` runs Python lint/regression checks and selectively builds runtimes.
+- `kubernetes.yml` lints/renders Helm and validates schemas before an optional manual sync.
+- `terraform-plan.yml` performs backend-free checks and optionally creates a reviewed saved plan.
+- `terraform-apply.yml` consumes that plan only after manual dispatch and environment approval.
 
-The workflow contains no Terraform plan/apply and does not mutate infrastructure.
+## Immutable image publishing and GitOps update
 
-## Immutable image publishing
+`docker.yml` uses the production environment and the existing ECR-only OIDC role
+configured in the `AWS_ECR_PUBLISH_ROLE_ARN` variable. It scans selected/changed
+runtimes, publishes immutable SHA tags and proposes ECR digests in production Helm
+values. It does not call kubectl or deploy as a side effect. Required reviewers
+and branch restrictions must be configured on the `production` environment.
 
-`.github/workflows/publish-images.yml` uses GitHub OIDC to assume the
-least-privilege role stored in `AWS_ECR_PUBLISH_ROLE_ARN`. It builds serving and
-training images, blocks on HIGH/CRITICAL Trivy findings, and pushes only full
-`sha-<git-sha>` tags to the immutable ECR repositories.
-
-Configure these repository settings:
-
-- GitHub variable `AWS_REGION`;
-- GitHub secret `AWS_ECR_PUBLISH_ROLE_ARN`; and
-- a `production` GitHub Environment with required reviewers and deployment
-  branch restrictions.
-
-The GitHub Environment approval protects image publication and the GitOps
-proposal. This is intentionally separate from the Airflow/MLflow human approval
-that authorizes registry model promotion; each system retains its own audit trail.
-
-## GitOps update
-
-After publishing, CI changes only `serving/helm/values/production.yaml`, updating
-both repositories and immutable tags. It opens a pull request and never invokes
-`kubectl`. Review and merge of that pull request is the deployment authorization;
-Argo CD observes Git and reconciles the Rollout.
+Review/merge the image PR, then manually run Kubernetes (or ML Deploy for model
+selection plus inference reconciliation). Applications retain explicit sync gates.
+The Kubernetes workflow uses its separately configured EKS role and a reachable
+runner to sync the reviewed commit through Argo, not a competing Helm release.
+For complete variables and gate behavior, see `docs/pipelines.md`.
 
 ## Verification
 
@@ -83,4 +68,4 @@ Automated rendered-manifest tests assert that:
 - the passing path includes an explicit final 100% traffic step.
 
 In a cluster, verify with `kubectl argo rollouts get rollout airbnb-inference
---watch` from an operator workstation. CI does not receive Kubernetes credentials.
+--watch` from an operator workstation. Only explicitly approved deployment jobs receive their configured EKS permissions.

@@ -1,0 +1,72 @@
+name: ML Deploy
+on:
+  pull_request:
+    paths: [serving/app/**, tests/test_serving.py, tests/test_model_loader.py, training/deployment.py, pipelines/deploy.py, scripts/verify_inference.py, .github/workflows/ml-deploy.yml]
+  push:
+    branches: [main]
+    paths: [serving/app/**, tests/test_serving.py, tests/test_model_loader.py, training/deployment.py, pipelines/deploy.py, scripts/verify_inference.py, .github/workflows/ml-deploy.yml]
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: Previously approved registry version (blank keeps the current champion)
+        type: string
+        default: ""
+      deploy:
+        description: Deploy the reviewed serving image and verify the approved model
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: ml-deploy-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.28"
+          enable-cache: true
+      - run: uv sync --frozen --extra test --extra orchestration
+      - run: uv run pytest tests/test_serving.py tests/test_model_loader.py tests/test_registry.py tests/test_model_deployment.py
+  approve-model:
+    needs: validate
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/main' && vars.ML_PIPELINE_EXECUTION_ENABLED == 'true' && vars.K8S_DEPLOY_ENABLED == 'true' }}
+    environment: production
+    runs-on: ${{ vars.AIRFLOW_RUNNER_LABEL || 'ubuntu-24.04' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Verify and select the explicitly approved model
+        env:
+          AIRFLOW_API_URL: ${{ vars.AIRFLOW_API_URL }}
+          AIRFLOW_API_TOKEN: ${{ secrets.AIRFLOW_API_TOKEN }}
+          AIRFLOW_DAG: airbnb_model_deploy
+          AIRFLOW_DAG_CONF: ${{ toJSON(inputs) }}
+          AIRFLOW_RUN_ID: github-${{ github.run_id }}-${{ github.run_attempt }}
+        run: python scripts/trigger_airflow.py
+  deploy:
+    needs: approve-model
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/main' && vars.K8S_DEPLOY_ENABLED == 'true' && vars.ML_PIPELINE_EXECUTION_ENABLED == 'true' }}
+    uses: ./.github/workflows/kubernetes.yml
+    with:
+      deploy: true
+      application: airbnb-inference
+    secrets: inherit
+  verify:
+    needs: deploy
+    if: ${{ needs.deploy.outputs.deployed == 'true' }}
+    runs-on: ${{ vars.EKS_RUNNER_LABEL || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Verify readiness and approved-model inference
+        env:
+          EXPECTED_MODEL_VERSION: ${{ inputs.model_version }}
+          SERVING_URL: ${{ vars.SERVING_URL || 'https://platf0rm.site' }}
+        run: python scripts/verify_inference.py

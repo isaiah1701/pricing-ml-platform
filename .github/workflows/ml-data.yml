@@ -1,4 +1,4 @@
-name: Data pipeline
+name: ML Data
 on:
   push:
     branches: [main]
@@ -8,8 +8,7 @@ on:
       - "training/lineage.py"
       - "feature_repo/**"
       - "pipelines/feature-build.py"
-      - ".github/workflows/data.yml"
-      - ".github/workflows/airflow-run.yml"
+      - ".github/workflows/ml-data.yml"
       - "scripts/trigger_airflow.py"
       - "pyproject.toml"
       - "uv.lock"
@@ -20,15 +19,14 @@ on:
       - "training/lineage.py"
       - "feature_repo/**"
       - "pipelines/feature-build.py"
-      - ".github/workflows/data.yml"
-      - ".github/workflows/airflow-run.yml"
+      - ".github/workflows/ml-data.yml"
       - "scripts/trigger_airflow.py"
       - "pyproject.toml"
       - "uv.lock"
   workflow_dispatch:
     inputs:
       execute:
-        description: Execute the production DAG (training incurs compute cost)
+        description: Execute the production data DAG
         type: boolean
         default: false
 permissions:
@@ -51,9 +49,20 @@ jobs:
       - run: uv sync --frozen --extra test --extra orchestration
       - run: uv run pytest tests/test_clean.py tests/test_transform.py tests/test_validation.py tests/test_lineage.py tests/test_feature_repo.py tests/test_feature_build_dag.py
   execute:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.execute && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.execute && github.ref == 'refs/heads/main' && vars.ML_PIPELINE_EXECUTION_ENABLED == 'true' }}
     needs: validate
-    uses: ./.github/workflows/airflow-run.yml
-    with:
-      dag: airbnb_feature_build
-    secrets: inherit
+    environment: production
+    runs-on: ${{ vars.AIRFLOW_RUNNER_LABEL || 'ubuntu-24.04' }}
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Run the approved Airflow DAG
+        env:
+          AIRFLOW_API_URL: ${{ vars.AIRFLOW_API_URL }}
+          AIRFLOW_API_TOKEN: ${{ secrets.AIRFLOW_API_TOKEN }}
+          AIRFLOW_DAG: airbnb_feature_build
+          AIRFLOW_RUN_ID: github-${{ github.run_id }}-${{ github.run_attempt }}
+        run: python scripts/trigger_airflow.py

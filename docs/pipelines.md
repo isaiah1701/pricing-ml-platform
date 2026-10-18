@@ -1,66 +1,126 @@
-# Independent pipelines
+# Platform pipelines
 
-| Entry point | Code-change behavior | Production execution |
+| Name | Workflow | Responsibility |
 | --- | --- | --- |
-| `data.yml` | Validate preprocessing, lineage, Feast and DAG tests | Dispatch with `execute=true`: `airbnb_feature_build` |
-| `training.yml` | Lightweight model/gate/DAG tests; no full ensemble | Dispatch with `execute=true`: `airbnb_model_training` |
-| `publish-images.yml` | Serving runtime changes on main propose an image promotion | Environment approval, OIDC publish, scanned digest, reviewed GitOps PR and explicit Argo sync |
+| ML Data | `ml-data.yml` | Schema/preprocessing/Feast tests; explicit data DAG execution |
+| ML Training | `ml-training.yml` | Lightweight training, gate and checkpoint tests; explicitly approved training |
+| ML Deploy | `ml-deploy.yml` | Verify/select an approved registry version and invoke Kubernetes reconciliation |
+| Docker | `docker.yml` | Python regression checks; selectively build, scan and publish runtimes |
+| Terraform Plan | `terraform-plan.yml` | Backend-free validation; optionally produce a saved production plan |
+| Terraform Apply | `terraform-apply.yml` | Manually apply an approved saved plan |
+| Kubernetes | `kubernetes.yml` | Helm/schema validation and explicitly approved Argo sync |
 
-Documentation and infrastructure changes do not trigger these ML entry points.
-`validate.yml` retains the complete test/manifests/Terraform suite; Docker builds
-are selected by runtime inputs. Feature code does not build the serving image.
-The serving image includes `training/train.py` for estimator deserialization, so
-changes to that shared class intentionally validate/publish serving too.
+Bootstrap is added in the next milestone. These are independent entry points;
+none automatically runs every downstream workflow. k6 remains local-only under
+`tests/k6/`; it has no GitHub Actions workflow. There is no extra CI workflow or
+internal runner workflow: shared Python helpers keep the entry points small.
 
-Data execution validates/cleans, builds deterministic offline features, publishes
-content-addressed lineage snapshots, applies Feast, materializes Redis, and
-verifies offline/online consistency. Matching input, preprocessing source and
-dependency versions reuse the checksum-verified Parquet output. Feast apply and
-Redis materialization deliberately repeat so an emptied online store recovers.
-Set `AIRBNB_SNAPSHOT_S3_URI` to retain dataset snapshots outside the worker.
+The layout follows the separation in the
+[reference workflows](https://github.com/isaiah1701/Observability-fintech-platform/tree/main/.github/workflows).
+Unlike the reference's automatic Apply chain, production application and
+infrastructure changes require explicit manual dispatch and environment approval.
 
-Training loads validated features and uses existing MAE and artifact reload gates
-before publishing `champion`. Drift events enter the existing retraining DAG,
-which now requires native Airflow approval **before** expensive training as well
-as approval before production promotion. New dataset ingestion is currently an
-operator action: approve the dataset, run data, inspect its version/validation,
-then explicitly request training. No new dataset event system is introduced.
+## ML execution
 
-## Configure GitHub execution
+Relevant feature changes trigger ML Data validation. Relevant training changes
+trigger ML Training validation, including checkpoint tests; neither code pushes
+nor ordinary pull requests execute the production ensemble. Training publication
+still requires existing MAE and artifact-reload gates. Drift-driven training and
+promotion retain native Airflow approvals. Training checkpoints use the existing
+Airflow PVC; see `docs/training-checkpoints.md` for scope and limits.
 
-Production ML execution is disabled unless `ML_PIPELINE_EXECUTION_ENABLED=true`.
-Set `AIRFLOW_API_URL` to an HTTPS endpoint reachable from the runner and provide
-a valid Airflow 3 bearer token in the `AIRFLOW_API_TOKEN` secret. It must remain
-valid through polling. Grant that identity access only to trigger/read the two
-listed DAGs. `AIRFLOW_RUNNER_LABEL` can select an existing runner with private
-network access. The current private Airflow service is **not** reachable from a
-standard GitHub runner: do not enable execution until connectivity and TLS are
-configured. Use the existing Airflow UI/manual entry points in the meantime.
-No ingress, runner, credentials or AWS permissions are provisioned here.
+Configure `ML_PIPELINE_EXECUTION_ENABLED=true`, a runner label in
+`AIRFLOW_RUNNER_LABEL`, a reachable HTTPS `AIRFLOW_API_URL` and a valid
+`AIRFLOW_API_TOKEN` secret. Limit the API identity to trigger/read the three DAGs:
+`airbnb_feature_build`, `airbnb_model_training`, `airbnb_model_deploy`. Tokens must
+remain valid through polling. Private Airflow is not reachable from ordinary
+GitHub-hosted runners without explicitly configured connectivity. No networking,
+runner or credentials are provisioned by these workflows.
 
-Configure required reviewers on the existing `production` GitHub environment.
-Dispatches execute only from main and wait for DAG success; timeouts do not cancel
-a running DAG. Inspect Airflow before retrying. GitHub run IDs prevent ambiguous
-duplicate submissions; max_active_runs=1 prevents concurrent executions per DAG.
+Data preprocessing reuses unchanged, checksum-verified processed inputs, then
+reapplies Feast/materializes Redis to recover emptied online stores. An approved
+new dataset remains an explicit operator handoff from data to training.
 
-Image publication retains `AWS_PUBLISH_ENABLED`, the production environment and
-the existing ECR-only OIDC role. Manual `component=training` builds only the
-Airflow/training runtime; serving is the default. The workflow never trains.
-Shared training runtime changes must be published/promoted and explicitly synced
-before executing the updated DAGs. Dependency and Docker caches reduce repeated
-build work. Existing SHA tags remain supported; new promotion PRs include the
-ECR digest and Helm uses `repository@sha256:...` when present.
+ML Deploy accepts an explicit previously approved version; a blank value retains
+and verifies the current champion. It checks READY status, source run/reload
+verification, serving's provenance gates and the actual model artifact checksum.
+A non-current version must already have `promotion_status=approved`; awaiting
+approval/rejected challengers cannot bypass the existing retraining process.
+Initial training marks successful gated registrations approved. The old current
+champion remains supported even if it predates that tag. Promotion preserves the
+old champion as rollback and exports the configured S3 recovery bundle.
 
-## Release and model-only promotion
+Publish and sync the updated training/Airflow runtime before executing updated
+DAGs. ML Deploy does not build images or run Terraform. Avoid concurrent registry
+promotions; MLflow offers no atomic conditional alias update. Existing governed
+retraining post-promotion checks and rollback remain available.
 
-1. Review the image PR and CI; merge it only after approval.
-2. Explicitly sync the existing Argo application. This workflow does not deploy.
-3. Check Argo health and `/ready`, then submit a valid `/predict` request using
-   the existing load-test fixtures. Record the observed model version.
-4. For model-only changes, use the governed Airflow promotion path. Serving
-   periodically resolves `champion`; no Docker rebuild is needed. Verify the
-   observed version and inference. Existing post-promotion checks can roll back
-   a failed model promotion.
+## Docker and Kubernetes
 
-The current refactor is validated offline; production execution and release
-verification require operator approval and are not claimed as completed runs.
+Docker runs Python regression tests and builds only changed runtime inputs.
+Manual dispatch selects exactly one runtime. PRs never assume the publish role.
+`AWS_PUBLISH_ENABLED=true`, the `production` environment and
+`AWS_ECR_PUBLISH_ROLE_ARN` variable gate ECR publication through OIDC. Images are
+scanned for HIGH/CRITICAL findings before publication; promoted values contain
+immutable digests. Publishing only proposes a GitOps PR; it never deploys.
+
+Review/merge the image PR, then manually run ML Deploy for inference or Kubernetes
+for platform changes. Kubernetes requires `deploy=true`, main,
+`K8S_DEPLOY_ENABLED=true` and the protected `production` environment. Set
+`AWS_EKS_DEPLOY_ROLE_ARN`, `EKS_CLUSTER_NAME`, `AWS_REGION`, an existing reachable
+runner through `EKS_RUNNER_LABEL`, and an EKS-compatible `KUBECTL_VERSION` (default
+v1.35.0 matches this repository). Give the role only the required EKS access and
+Argo application read/patch/wait permissions. No role is created here.
+
+Reconciliation patches only the selected existing Argo Application's sync
+operation at the exact reviewed Git SHA. It validates repository/path/branch and
+waits for that operation and revision to be Synced/Healthy, rather than accepting
+an old healthy status. It does not create competing Helm releases. ML Deploy
+checks champion readiness and inference after the sync; `SERVING_URL` defaults to
+`https://platf0rm.site`. Model-only promotions need no image rebuild.
+
+## Reviewed Terraform plans
+
+PRs only run format/backend-free validation, including bootstrap/prod Terraform
+and the isolated autoscaling proposal. A real plan is allowed only on main with
+`TF_PLAN_ENABLED=true` and environment approval. Configure:
+
+- `AWS_TF_PLAN_ROLE_ARN`: a reviewed plan role with required AWS read access and
+  existing remote-state locking access.
+- `TF_STATE_BUCKET`, `TF_STATE_KEY`, `AWS_REGION`: the actual existing backend.
+- `TF_PROD_TFVARS_JSON` secret: the actual production inputs as JSON, explicitly
+  including `cost_optimized=true`. CI cannot silently fall back to larger defaults.
+
+The artifact contains the binary plan, identity metadata and value-free change
+addresses/actions. It excludes tfvars and state. Metadata binds repository,
+commit, workflow run, backend fingerprint, Terraform version and provider lock
+hash. Plan contents are sensitive: retain private repository artifact access;
+retention is one day. Failed Terraform output is kept only in owner-readable
+runner files, not published as an artifact.
+
+Apply is manual-only: provide `plan_run_id`, the reviewed `source_sha`, and
+`confirm_apply=true`. It also requires `TF_APPLY_ENABLED=true`, main, protected
+`production`, and `AWS_TF_APPLY_ROLE_ARN`. GitHub API checks require a successful
+trusted Terraform Plan run on main, not a PR/fork artifact. The downloaded binary
+and metadata are checked against the approved run, commit, backend, provider
+lock and version; plans older than 24 hours are rejected. Missing or mismatched
+artifacts fail. Apply never replans. Terraform's native saved-plan state serial
+check rejects plans made stale by another apply. Plan and Apply share a production
+concurrency group and use the existing S3 state lock.
+
+Use separate least-privilege AWS roles where available and configure required
+reviewers/branch restrictions on `production`. Workflows declare environment
+gates; reviewers must actually be configured in GitHub. Existing S3 model bucket
+protection remains in effect. No workflow applies on a normal push.
+
+## Offline validation
+
+```sh
+.venv/bin/pytest -q tests/test_delivery_workflows.py tests/test_platform_pipelines.py tests/test_model_deployment.py
+.venv/bin/pytest -q tests/test_training_checkpoints.py tests/test_model_recovery.py
+uvx --from ruff==0.16.7 ruff check .
+actionlint -shellcheck=
+```
+
+Cloud-dependent paths are exercised with mocks/local registries. No live AWS,
+GitOps sync, model promotion, production load test or Terraform apply was run.

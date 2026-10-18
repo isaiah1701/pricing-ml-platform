@@ -10,7 +10,7 @@ from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 LOGGER = logging.getLogger(__name__)
-ALLOWED_DAGS = {"airbnb_feature_build", "airbnb_model_training"}
+ALLOWED_DAGS = {"airbnb_feature_build", "airbnb_model_training", "airbnb_model_deploy"}
 
 
 def run_pipeline(
@@ -20,6 +20,7 @@ def run_pipeline(
     run_id: str,
     *,
     timeout: float = 21000,
+    conf: dict[str, object] | None = None,
 ) -> None:
     """Submit one uniquely identified run, failing on rejection or timeout."""
     parsed = urlparse(url)
@@ -38,7 +39,9 @@ def run_pipeline(
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     request = Request(
         endpoint,
-        data=json.dumps({"dag_run_id": run_id, "logical_date": None}).encode(),
+        data=json.dumps(
+            {"dag_run_id": run_id, "logical_date": None, "conf": conf or {}}
+        ).encode(),
         headers=headers,
         method="POST",
     )
@@ -69,6 +72,7 @@ def main() -> None:
         os.environ.get("AIRFLOW_API_TOKEN", ""),
         os.environ.get("AIRFLOW_DAG", ""),
         os.environ.get("AIRFLOW_RUN_ID", ""),
+        conf=json.loads(os.environ.get("AIRFLOW_DAG_CONF", "{}")),
     )
 
 

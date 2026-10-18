@@ -1,0 +1,66 @@
+name: Terraform Plan
+on:
+  pull_request:
+    paths: [terraform/**, docs/proposals/autoscaling/**, scripts/terraform_ci.py, .github/workflows/terraform-plan.yml, .github/workflows/terraform-apply.yml]
+  push:
+    branches: [main]
+    paths: [terraform/**, docs/proposals/autoscaling/**, scripts/terraform_ci.py, .github/workflows/terraform-plan.yml, .github/workflows/terraform-apply.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  terraform:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: "1.11.0"
+      - name: Format Terraform definitions
+        run: terraform fmt -check -recursive terraform
+      - name: Validate production Terraform without a backend
+        run: |
+          terraform -chdir=terraform/bootstrap/prod init -backend=false -input=false
+          terraform -chdir=terraform/bootstrap/prod validate
+          terraform -chdir=terraform/environments/prod init -backend=false -input=false
+          terraform -chdir=terraform/environments/prod validate
+      - name: Validate offline autoscaling proposal
+        run: |
+          terraform fmt -check docs/proposals/autoscaling
+          terraform -chdir=docs/proposals/autoscaling init -backend=false -input=false
+          terraform -chdir=docs/proposals/autoscaling validate
+          terraform -chdir=docs/proposals/autoscaling test
+  plan:
+    needs: terraform
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.TF_PLAN_ENABLED == 'true' }}
+    environment: production
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: terraform-production
+      cancel-in-progress: false
+    env:
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_KEY: ${{ vars.TF_STATE_KEY }}
+      TF_STATE_REGION: ${{ vars.AWS_REGION || 'eu-west-2' }}
+      TF_PROD_TFVARS_JSON: ${{ secrets.TF_PROD_TFVARS_JSON }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_TF_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-2' }}
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: "1.11.0"
+          terraform_wrapper: false
+      - name: Create the reviewable production plan
+        run: python scripts/terraform_ci.py plan --artifact-dir "$RUNNER_TEMP/terraform-plan"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: terraform-plan-prod
+          path: ${{ runner.temp }}/terraform-plan/
+          retention-days: 1
+          if-no-files-found: error
