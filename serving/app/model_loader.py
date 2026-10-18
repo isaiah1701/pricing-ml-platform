@@ -48,7 +48,16 @@ class PredictionModel(Protocol):
 
 
 class ModelLoadError(RuntimeError):
-    """Indicate that an aliased registry model could not be loaded."""
+    """Indicate a failed alias resolution or load, with a known target if available."""
+
+    def __init__(
+        self, message: str, *, target_version: str | None = None,
+        registry_available: bool | None = None,
+    ) -> None:
+        """Retain a resolved target without disclosing registry exception details."""
+        super().__init__(message)
+        self.target_version = target_version
+        self.registry_available = registry_available
 
 
 @dataclass(frozen=True)
@@ -78,7 +87,9 @@ def resolve_alias_version(settings: Settings) -> str:
         )
     except Exception as exc:
         LOGGER.error("Registry alias could not be resolved")
-        raise ModelLoadError("Configured registry alias is unavailable") from exc
+        raise ModelLoadError(
+            "Configured registry alias is unavailable", registry_available=False
+        ) from exc
     return str(version.version)
 
 
@@ -176,24 +187,30 @@ def load_model_version(settings: Settings, version: str) -> LoadedModel:
 
 def load_champion_model(settings: Settings) -> LoadedModel:
     """Resolve and load the concrete model version behind the configured alias."""
-    return load_model_version(settings, resolve_alias_version(settings))
+    version = resolve_alias_version(settings)
+    try:
+        return load_model_version(settings, version)
+    except ModelLoadError as exc:
+        raise ModelLoadError(
+            str(exc), target_version=version, registry_available=True
+        ) from exc
 
 
 def refresh_champion_model(
     current: LoadedModel,
     settings: Settings,
 ) -> LoadedModel:
-    """Load a changed alias target, retaining the current model on any failure."""
-    try:
-        version = resolve_alias_version(settings)
-        if version == current.version:
-            return current
-        replacement = load_model_version(settings, version)
-    except ModelLoadError:
-        LOGGER.exception(
-            "Model refresh failed; retaining registry version %s", current.version
-        )
+    """Prepare a changed alias target; let the caller retain state on failure."""
+    version = resolve_alias_version(settings)
+    if version == current.version:
         return current
+    try:
+        replacement = load_model_version(settings, version)
+    except ModelLoadError as exc:
+        LOGGER.error("Model refresh could not prepare target version %s", version)
+        raise ModelLoadError(
+            str(exc), target_version=version, registry_available=True
+        ) from exc
     LOGGER.info(
         "Model refresh prepared version %s to replace %s", version, current.version
     )

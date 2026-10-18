@@ -99,6 +99,10 @@ class ServingMetrics:
     prediction_inflight: Gauge
     prediction_rejected: Counter
     prediction_events: Counter
+    refresh_failures: Counter
+    refresh_last_success: Gauge
+    champion_info: Gauge
+    registry_available: Gauge
 
 
 def _create_metrics() -> ServingMetrics:
@@ -110,6 +114,24 @@ def _create_metrics() -> ServingMetrics:
     registry = CollectorRegistry()
     return ServingMetrics(
         registry=registry,
+        registry_available=Gauge(
+            "airbnb_registry_available",
+            "Whether the latest registry alias lookup succeeded; artifact failures are separate.",
+            registry=registry,
+        ),
+        refresh_failures=Counter(
+            "airbnb_model_refresh_failures_total",
+            "Failed model alias resolution or preparation attempts.", registry=registry,
+        ),
+        refresh_last_success=Gauge(
+            "airbnb_model_refresh_last_success_timestamp_seconds",
+            "Last successful model alias resolution and load check.", registry=registry,
+        ),
+        champion_info=Gauge(
+            "airbnb_champion_model_info",
+            "Most recently resolved registry alias target, including failed loads.",
+            ("model", "alias", "version"), registry=registry,
+        ),
         requests=Counter(
             "airbnb_http_requests_total",
             "HTTP requests by endpoint and status.",
@@ -184,6 +206,7 @@ def create_app(
     """Create an instrumented application with safe periodic model refresh."""
     runtime_settings = settings or get_settings()
     metrics = _create_metrics()
+    metrics.registry_available.set(float("nan"))
     runtime_event_recorder = (
         event_recorder
         if event_recorder is not None
@@ -206,6 +229,28 @@ def create_app(
             loaded.version,
         ).set(1)
 
+    def record_refresh_success(loaded: LoadedModel) -> None:
+        """Replace alias identity and record a completed successful refresh check."""
+        metrics.registry_available.set(1)
+        metrics.champion_info.clear()
+        metrics.champion_info.labels(
+            runtime_settings.model_name, runtime_settings.model_alias, loaded.version
+        ).set(1)
+        metrics.refresh_last_success.set(time.time())
+
+    def record_refresh_failure(error: Exception) -> None:
+        """Count a failed check while keeping loaded-model readiness unchanged."""
+        metrics.refresh_failures.inc()
+        registry_available = getattr(error, "registry_available", None)
+        if registry_available is not None:
+            metrics.registry_available.set(float(registry_available))
+        metrics.champion_info.clear()
+        target = getattr(error, "target_version", None)
+        if target:
+            metrics.champion_info.labels(
+                runtime_settings.model_name, runtime_settings.model_alias, target
+            ).set(1)
+
     async def refresh_loop(application: FastAPI) -> None:
         """Periodically replace state only after a complete successful load."""
         interval = runtime_settings.model_refresh_interval_seconds
@@ -220,7 +265,8 @@ def create_app(
                         await asyncio.to_thread(model_loader, runtime_settings),
                         runtime_settings,
                     )
-                except ModelLoadError:
+                except ModelLoadError as exc:
+                    record_refresh_failure(exc)
                     LOGGER.exception("Model refresh could not recover readiness")
                     continue
             else:
@@ -228,12 +274,14 @@ def create_app(
                     replacement = await asyncio.to_thread(
                         model_refresher, current, runtime_settings
                     )
-                except Exception:
+                except Exception as exc:
+                    record_refresh_failure(exc)
                     LOGGER.exception(
-                        "Unexpected refresh failure; retaining model version %s",
+                        "Model refresh failure; retaining model version %s",
                         current.version,
                     )
                     continue
+            record_refresh_success(replacement)
             if replacement is not current:
                 application.state.loaded_model = replacement
                 application.state.model = replacement.model
@@ -258,7 +306,9 @@ def create_app(
             application.state.loaded_model = loaded
             application.state.model = loaded.model
             application.state.model_version = loaded.version
+            record_refresh_success(loaded)
         except ModelLoadError as exc:
+            record_refresh_failure(exc)
             application.state.model_error = exc
             LOGGER.error("Application started without a ready champion model")
         record_loaded_model(application, application.state.loaded_model)

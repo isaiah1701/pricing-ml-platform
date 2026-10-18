@@ -223,10 +223,10 @@ def test_refresh_replaces_model_after_successful_load(
     assert refreshed.version == "2"
 
 
-def test_refresh_retains_current_model_when_replacement_fails(
+def test_refresh_reports_resolved_target_when_replacement_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Keep serving the current artifact when a changed alias cannot load."""
+    """Report a failed target so the API can retain serving and expose the mismatch."""
     settings = Settings(MODEL_NAME="prices", MODEL_ALIAS="champion")
     current = LoadedModel(FixedModel(1.0), "1", "models:/prices/1")
 
@@ -245,4 +245,8 @@ def test_refresh_retains_current_model_when_replacement_fails(
         raise ModelLoadError("load failed")
 
     monkeypatch.setattr("serving.app.model_loader.load_model_version", fail_load)
-    assert refresh_champion_model(current, settings) is current
+    with pytest.raises(ModelLoadError) as caught:
+        refresh_champion_model(current, settings)
+    assert caught.value.target_version == "2"
+    assert caught.value.registry_available is True
+    assert current.version == "1"
