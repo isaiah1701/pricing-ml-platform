@@ -347,36 +347,34 @@ addons:
                 metrics:
                 - name: rollout_info
                   help: Current observed rollout phase and desired pod revision.
-                  labelsFromPath:
-                    phase:
-                    - status
-                    - phase
-                    revision:
-                    - status
-                    - currentPodHash
                   each:
                     type: Info
                     info:
-                      path:
-                      - metadata
+                      labelsFromPath:
+                        phase:
+                        - status
+                        - phase
+                        revision:
+                        - status
+                        - currentPodHash
                 - name: rollout_aborted
                   help: Whether the current Rollout is explicitly aborted.
                   each:
                     type: Gauge
                     gauge:
-                      path: [status, abort]
+                      path:
+                      - status
+                      - abort
                       nilIsZero: true
                 - name: rollout_stable_info
                   help: Retained stable rollout pod revision.
-                  labelsFromPath:
-                    revision:
-                    - status
-                    - stableRS
                   each:
                     type: Info
                     info:
-                      path:
-                      - metadata
+                      labelsFromPath:
+                        revision:
+                        - status
+                        - stableRS
               - groupVersionKind:
                   group: argoproj.io
                   version: v1alpha1
@@ -389,17 +387,16 @@ addons:
                   analysisrun:
                   - metadata
                   - name
-                  phase:
-                  - status
-                  - phase
                 metrics:
                 - name: analysis_run_info
                   help: Current retained canary analysis phase.
                   each:
                     type: Info
                     info:
-                      path:
-                      - metadata
+                      labelsFromPath:
+                        phase:
+                        - status
+                        - phase
         resources:
           requests:
             cpu: 10m

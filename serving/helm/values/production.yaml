@@ -1,10 +1,12 @@
 image:
   repository: 655916164714.dkr.ecr.eu-west-2.amazonaws.com/prod-mlops-prod-serving
-  tag: sha-838f3bcec5d73f7540ede21e36b26dc89a8e171c
+  tag: sha-5231c9e4d25debf0834b65f7b2c95a45f70f73ad
   pullPolicy: IfNotPresent
+  digest: sha256:b08f50e626a540e32d914fc6bbc1d8782658122319871c464ac4e872420fcb31
 trainingImage:
   repository: 655916164714.dkr.ecr.eu-west-2.amazonaws.com/prod-mlops-prod-training
-  tag: sha-838f3bcec5d73f7540ede21e36b26dc89a8e171c
+  tag: sha-5231c9e4d25debf0834b65f7b2c95a45f70f73ad
+  digest: sha256:6cebdf6dd19036cca1fb3571486b5f0fd86d17e9cffbf30bbd00577a1af59add
 ingress:
   enabled: true
   className: traefik
