@@ -10,11 +10,13 @@ workload:
 image:
   repository: airbnb-price-predictor
   tag: dev
+  digest: ""
   pullPolicy: IfNotPresent
 
 trainingImage:
   repository: airbnb-model-training
   tag: dev
+  digest: ""
 
 rollout:
   initialWeight: 5

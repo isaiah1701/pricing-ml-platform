@@ -2,6 +2,18 @@
 {{- .Chart.Name | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+{{- define "airbnb.image" -}}
+{{- $repository := required "image.repository is required" .repository -}}
+{{- if .digest -}}
+{{- if not (regexMatch "^sha256:[0-9a-f]{64}$" .digest) -}}
+{{- fail "image.digest must be a sha256 digest" -}}
+{{- end -}}
+{{- printf "%s@%s" $repository .digest -}}
+{{- else -}}
+{{- printf "%s:%s" $repository (required "image.tag is required" .tag) -}}
+{{- end -}}
+{{- end }}
+
 {{- define "airbnb.airflowProbe" -}}
 {{- if eq . "api-server" }}
 httpGet:

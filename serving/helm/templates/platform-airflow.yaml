@@ -1,6 +1,6 @@
 {{- if and .Values.platform.enabled (not .Values.bootstrap.enabled) }}
 {{- $airflow := .Values.platform.airflow }}
-{{- $image := printf "%s:%s" .Values.trainingImage.repository .Values.trainingImage.tag }}
+{{- $image := include "airbnb.image" .Values.trainingImage }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:

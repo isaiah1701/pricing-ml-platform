@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import logging
 import subprocess
+from fnmatch import fnmatchcase
 from pathlib import Path
+from typing import Any
 
+import pytest
 import yaml
 
 LOGGER = logging.getLogger(__name__)
@@ -25,8 +28,6 @@ def test_image_promotion_passes_expression_and_filename_to_yq() -> None:
         if step.get("name") == "Update environment values only"
     )
     command = step["with"]["cmd"]
-    for field in ("serving", "training", "tag"):
-        command = command.replace("${{ steps.images.outputs." + field + " }}", field)
     result = subprocess.run(
         [
             "bash",
@@ -63,15 +64,18 @@ def test_publish_workflow_is_oidc_immutable_and_gitops_only() -> None:
         PROJECT_ROOT / ".github" / "workflows" / "publish-images.yml"
     ).read_text(encoding="utf-8")
     configuration = yaml.load(workflow, Loader=yaml.BaseLoader)
-    assert set(configuration["on"]) == {"workflow_dispatch"}
+    assert set(configuration["on"]) == {"workflow_dispatch", "push"}
+    assert "training/preprocessing/**" not in configuration["on"]["push"]["paths"]
     assert configuration["jobs"]["publish-production"]["if"] == (
         "${{ vars.AWS_PUBLISH_ENABLED == 'true' }}"
     )
     assert "id-token: write" in workflow
     assert "environment: production" in workflow
     assert "sha-${GITHUB_SHA}" in workflow
-    assert workflow.count("build-args: GIT_COMMIT=${{ github.sha }}") == 2
-    assert workflow.count("aquasecurity/trivy-action") == 2
+    assert workflow.count("build-args: GIT_COMMIT=${{ github.sha }}") == 1
+    assert workflow.count("aquasecurity/trivy-action") == 1
+    assert "steps.published.outputs.digest" in workflow
+    assert "needs: validate" in workflow
     assert "docker push" in workflow
     assert "create-pull-request" in workflow
     assert "serving/helm/values/production.yaml" in workflow
@@ -91,3 +95,104 @@ def test_gitops_requires_manual_sync_before_launch() -> None:
     )
     assert values["syncPolicy"]["automated"] is False
     assert root_application["spec"]["syncPolicy"]["automated"]["enabled"] is False
+
+
+def workflow(name: str) -> dict[str, Any]:
+    """Read a workflow while preserving the YAML on key as text."""
+    return yaml.load(
+        (PROJECT_ROOT / f".github/workflows/{name}.yml").read_text(),
+        Loader=yaml.BaseLoader,
+    )
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("docs/architecture.md", set()),
+        ("terraform/modules/eks/main.tf", set()),
+        ("serving/app/api.py", {"publish-images"}),
+        ("training/preprocessing/clean.py", {"data"}),
+        ("feature_repo/features.py", {"data"}),
+        ("pipelines/training.py", {"training"}),
+        ("training/train.py", {"training", "publish-images"}),
+    ],
+)
+def test_pipeline_push_filters(path: str, expected: set[str]) -> None:
+    """Exercise representative changes against positive and negative path filters."""
+    triggered: set[str] = set()
+    for name in ("data", "training", "publish-images"):
+        matches = False
+        for pattern in workflow(name)["on"]["push"]["paths"]:
+            negative = pattern.startswith("!")
+            if fnmatchcase(path, pattern.lstrip("!")):
+                matches = not negative
+        if matches:
+            triggered.add(name)
+    assert triggered == expected
+
+
+@pytest.mark.parametrize("name", ["data", "training"])
+def test_expensive_execution_requires_manual_opt_in(name: str) -> None:
+    """Prevent code pushes and ordinary pull requests from executing production DAGs."""
+    config = workflow(name)
+    assert config["on"]["workflow_dispatch"]["inputs"]["execute"]["default"] == "false"
+    condition = config["jobs"]["execute"]["if"]
+    assert "github.event_name == 'workflow_dispatch'" in condition
+    assert "inputs.execute" in condition
+    assert "refs/heads/main" in condition
+    runner = workflow("airflow-run")["jobs"]["run"]
+    assert runner["environment"] == "production"
+    assert "ML_PIPELINE_EXECUTION_ENABLED" in runner["if"]
+
+
+def test_data_changes_do_not_build_serving_runtime() -> None:
+    """Keep preprocessing-only changes out of serving Docker validation."""
+    config = workflow("validate")
+    steps = config["jobs"]["changes"]["steps"]
+    filters = yaml.safe_load(
+        next(step["with"]["filters"] for step in steps if "id" in step)
+    )
+    assert not any(
+        fnmatchcase("training/preprocessing/clean.py", pattern)
+        for pattern in filters["serving"]
+    )
+    image = next(
+        step
+        for step in config["jobs"]["image"]["steps"]
+        if step.get("name") == "Build local candidate image"
+    )
+    assert "outputs.serving" in image["if"]
+
+
+def test_helm_selects_digests_and_rejects_invalid_digest() -> None:
+    """Render both runtimes using their digest while retaining legacy tag support."""
+    digest = "sha256:" + "a" * 64
+    command = [
+        "helm",
+        "template",
+        "test",
+        str(PROJECT_ROOT / "serving/helm"),
+        "-f",
+        str(PROJECT_ROOT / "serving/helm/values/production.yaml"),
+        "--set",
+        "image.repository=airbnb-price-predictor",
+        "--set",
+        "trainingImage.repository=airbnb-model-training",
+        "--set",
+        f"image.digest={digest}",
+        "--set",
+        f"trainingImage.digest={digest}",
+        "--set",
+        "platform.enabled=true",
+    ]
+    rendered = subprocess.run(command, check=True, capture_output=True, text=True)
+    assert f"airbnb-price-predictor@{digest}" in rendered.stdout
+    assert f"airbnb-model-training@{digest}" in rendered.stdout
+    rejected = subprocess.run(
+        command + ["--set", "image.digest=not-a-digest"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert rejected.returncode != 0
+    assert "image.digest must be a sha256 digest" in rejected.stderr

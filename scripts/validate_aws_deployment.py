@@ -57,6 +57,9 @@ def validate_values(values: dict[str, Any], *, check_images: bool = False) -> No
             invalid.append(f"{image}.repository")
         if not re.fullmatch(r"sha-[0-9a-f]{40}", tag):
             invalid.append(f"{image}.tag")
+        digest = _value(values, f"{image}.digest")
+        if digest and not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+            invalid.append(f"{image}.digest")
     redis = _value(values, "platform.airflow.redisConnectionString")
     if "://" in redis or not redis.endswith(",ssl=true"):
         invalid.append("platform.airflow.redisConnectionString (Feast TLS format)")
@@ -68,7 +71,7 @@ def validate_values(values: dict[str, Any], *, check_images: bool = False) -> No
     if check_images:
         for image in ("image", "trainingImage"):
             registry, repository = _value(values, f"{image}.repository").split("/", 1)
-            subprocess.run(
+            result = subprocess.run(
                 [
                     "aws",
                     "ecr",
@@ -90,6 +93,10 @@ def validate_values(values: dict[str, Any], *, check_images: bool = False) -> No
                 capture_output=True,
                 text=True,
             )
+            expected = _value(values, f"{image}.digest")
+            if expected and result.stdout.strip() != expected:
+                LOGGER.error("ECR digest differs from the selected %s digest", image)
+                raise ValueError(f"{image}.digest does not match its ECR tag")
         LOGGER.info("Both immutable image tags exist in ECR")
     LOGGER.info("Production deployment values passed validation")
 

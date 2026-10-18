@@ -133,6 +133,7 @@ def validate_feature_dataset(
         transformation_name="training.preprocessing.pipeline.run_pipeline",
         git_commit=resolve_git_commit(PROJECT_ROOT),
         feature_service_name="airbnb_price_model_v1",
+        object_store_uri=os.getenv("AIRBNB_SNAPSHOT_S3_URI"),
     )
     immutable_report = require_valid_dataset(published["snapshot_path"])
     return {

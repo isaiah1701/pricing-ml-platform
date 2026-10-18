@@ -17,6 +17,7 @@ def test_retraining_dag_uses_native_approval_and_rollback_path() -> None:
     assert retraining_dag.dag_id == "airbnb_model_retraining"
     assert {
         "load_retraining_event",
+        "approve_expensive_training",
         "train_and_compare",
         "challenger_gate",
         "record_rejection",
@@ -28,6 +29,12 @@ def test_retraining_dag_uses_native_approval_and_rollback_path() -> None:
         "rollback_promotion",
         "promotion_succeeded",
     } == task_ids
+    training_approval = retraining_dag.task_dict["approve_expensive_training"]
+    assert isinstance(training_approval, ApprovalOperator)
+    assert training_approval.upstream_task_ids == {"load_retraining_event"}
+    assert "approve_expensive_training" in retraining_dag.task_dict[
+        "train_and_compare"
+    ].upstream_task_ids
     approval = retraining_dag.task_dict["approve_production_promotion"]
     assert isinstance(approval, ApprovalOperator)
     assert approval.upstream_task_ids == {"register_challenger"}

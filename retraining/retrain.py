@@ -574,7 +574,15 @@ def promotion_succeeded(promotion: PromotionResult) -> None:
 def retraining_pipeline() -> None:
     """Define the governed challenger-to-production lifecycle."""
     event = load_retraining_event()
+    training_approval = ApprovalOperator(
+        task_id="approve_expensive_training",
+        subject="Approve expensive drift-driven training",
+        body="Review the drift event and compute budget before starting the ensemble.",
+        fail_on_reject=True,
+    )
+    event >> training_approval
     evaluation = train_and_compare(event)  # type: ignore[arg-type]
+    training_approval >> evaluation
     gate = challenger_gate(evaluation)  # type: ignore[arg-type]
     rejected = record_rejection(evaluation)  # type: ignore[arg-type]
     registered = register_challenger(evaluation)  # type: ignore[arg-type]

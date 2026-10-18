@@ -23,8 +23,27 @@
 
 ## Delivery state
 
-- Completed: Phase 0 (inspection and recoverable checkpoint).
-- Next: Phase 1 — selective independent data/training/deployment entry points.
+- Completed: Phase 0 (`acd0222`); Phase 1 (this milestone commit; resolve with
+  `git log --oneline --grep='independent gated'`).
+- Phase 1 changes: added data/training entry workflows and a reusable approved
+  Airflow executor; selective Docker validation; serving-only automatic publishing
+  with manual training-image selection; cached builds/dependencies; ECR digests
+  in GitOps promotions and Helm; checksum-verified preprocessing reuse; explicit
+  pre-training drift approval; S3 publication of data snapshots.
+- Validation: full pytest run had 121 passing tests and one new Helm test fixture
+  failure (missing DB coordinates); fixed the fixture and reran the complete
+  delivery-workflow module successfully (15 tests). Other 107 tests were unchanged
+  by that fixture fix. Targeted DAG/execution/deployment suite: 35 passed before
+  the added digest test. Repository Ruff, actionlint 1.7.7, two Helm lint variants,
+  and `git diff --check` passed. No container push or production run performed.
+- Relevant paths: `.github/workflows/{data,training,airflow-run,publish-images,validate}.yml`,
+  `scripts/trigger_airflow.py`, `docs/pipelines.md`, preprocessing, retraining and
+  Helm image helper changes; policy/execution tests.
+- Limitation: GitHub execution requires a runner reachable HTTPS Airflow API,
+  a valid bearer token, and `ML_PIPELINE_EXECUTION_ENABLED=true`. Configure required
+  reviewers on the production environment. Current private Airflow is not exposed
+  by this change. Existing manual DAG/UI entry points remain available.
+- Next: Phase 2 — persistent approved-model recovery into a fresh registry.
 - Remaining: Phase 2 registry recovery; Phase 3 k6; Phase 4 dashboards;
   Phase 5 optional autoscaling proposal only if earlier phases complete.
 - No deployments, AWS mutation, full training or node provisioning authorized.
