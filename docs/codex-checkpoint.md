@@ -25,8 +25,7 @@
 
 - Completed: Phase 0 (`acd0222`); Phase 1 (`e876ff1`); Phase 2 (`8341b87`);
   Phase 3 (`ecf4ff9`); Phase 4 (`43cb04d`). Phase 5 delivered only as the
-  permitted tested proposal (this milestone;
-  `git log --oneline --grep='isolated two-node autoscaling proposal'`).
+  permitted tested proposal (`f56c760`).
 - Phase 1 changes: added data/training entry workflows and a reusable approved
   Airflow executor; selective Docker validation; serving-only automatic publishing
   with manual training-image selection; cached builds/dependencies; ECR digests
