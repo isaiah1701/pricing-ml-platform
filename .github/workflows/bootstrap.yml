@@ -35,7 +35,7 @@ jobs:
       - uses: azure/setup-helm@bf6a7d304bc2fdb57e0331155b7ebf2c504acf0a
         with:
           version: v3.20.1
-      - uses: azure/setup-kubectl@v4
+      - uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4
         with:
           version: ${{ vars.KUBECTL_VERSION || 'v1.35.0' }}
       - name: Install pinned Helmfile

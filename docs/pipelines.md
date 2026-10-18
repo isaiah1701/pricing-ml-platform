@@ -71,13 +71,22 @@ for platform changes. Kubernetes requires `deploy=true`, main,
 `AWS_EKS_DEPLOY_ROLE_ARN`, `EKS_CLUSTER_NAME`, `AWS_REGION`, an existing reachable
 runner through `EKS_RUNNER_LABEL`, and an EKS-compatible `KUBECTL_VERSION` (default
 v1.35.0 matches this repository). Give the role only the required EKS access and
-Argo application read/patch/wait permissions. No role is created here.
+Argo application read/patch/wait permissions, ECR DescribeImages for legacy SHA tags,
+and read access to the inference Rollout/pod status. No role is created here.
 
-Reconciliation patches only the selected existing Argo Application's sync
-operation at the exact reviewed Git SHA. It validates repository/path/branch and
+Select `controllers` to sync the reviewed root and then its declared controller
+Applications in dependency-wave order; select `airbnb-platform` or
+`airbnb-inference` separately. Controller sources must exactly match the reviewed
+root chart and use their pinned chart versions. Git applications use the reviewed
+Git SHA. Each sync request has a unique operation marker, so an old success at
+the same revision cannot satisfy a new request. Reconciliation patches only the
+selected existing Argo Application's sync operation. It validates repository/path/branch and
 waits for that operation and revision to be Synced/Healthy, rather than accepting
-an old healthy status. It does not create competing Helm releases. ML Deploy
-checks champion readiness and inference after the sync; `SERVING_URL` defaults to
+an old healthy status. It does not create competing Helm releases. For inference it compares the live
+Rollout image with reviewed values and checks ready desired pods against the ECR
+digest. Legacy immutable SHA tags are resolved read-only; no image build is implied.
+ML Deploy passes its selected model version into Kubernetes. Bounded readiness/
+inference polling allows the existing champion-refresh interval after sync; `SERVING_URL` defaults to
 `https://platf0rm.site`. Model-only promotions need no image rebuild.
 
 ## Reviewed Terraform plans
@@ -89,12 +98,15 @@ and the isolated autoscaling proposal. A real plan is allowed only on main with
 - `AWS_TF_PLAN_ROLE_ARN`: a reviewed plan role with required AWS read access and
   existing remote-state locking access.
 - `TF_STATE_BUCKET`, `TF_STATE_KEY`, `AWS_REGION`: the actual existing backend.
+- `AWS_ACCOUNT_ID`: the independently configured expected production account;
+  STS must match for both Plan and Apply.
 - `TF_PROD_TFVARS_JSON` secret: the actual production inputs as JSON, explicitly
   including `cost_optimized=true`. CI cannot silently fall back to larger defaults.
 
 The artifact contains the binary plan, identity metadata and value-free change
 addresses/actions. It excludes tfvars and state. Metadata binds repository,
-commit, workflow run, backend fingerprint, Terraform version and provider lock
+commit, workflow run, production environment/AWS account, backend fingerprint,
+Terraform version and provider lock
 hash. Plan contents are sensitive: retain private repository artifact access;
 retention is one day. Failed Terraform output is kept only in owner-readable
 runner files, not published as an artifact.
@@ -105,7 +117,8 @@ Apply is manual-only: provide `plan_run_id`, the reviewed `source_sha`, and
 trusted Terraform Plan run on main, not a PR/fork artifact. The downloaded binary
 and metadata are checked against the approved run, commit, backend, provider
 lock and version; plans older than 24 hours are rejected. Missing or mismatched
-artifacts fail. Apply never replans. Terraform's native saved-plan state serial
+artifacts fail. A plan is also rejected if main has advanced since it was made;
+request/review a new plan explicitly in that case. Apply never replans. Terraform's native saved-plan state serial
 check rejects plans made stale by another apply. Plan and Apply share a production
 concurrency group and use the existing S3 state lock.
 

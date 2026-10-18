@@ -31,7 +31,7 @@ jobs:
       training: ${{ steps.paths.outputs.training }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
         id: paths
         with:
           filters: |
@@ -119,7 +119,7 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: "0.11.28"
           enable-cache: true
@@ -155,13 +155,13 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Configure AWS credentials through GitHub OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
         with:
           role-to-assume: ${{ vars.AWS_ECR_PUBLISH_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
       - name: Authenticate to Amazon ECR
         id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@fa648b43de3d4d023bcb3f89ed6940096949c419 # v2
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Set immutable image coordinates
         id: images
@@ -178,7 +178,7 @@ jobs:
             echo 'field=trainingImage' >> "$GITHUB_OUTPUT"
           fi
       - name: Build selected runtime for scanning
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: ${{ steps.images.outputs.dockerfile }}
@@ -215,7 +215,7 @@ jobs:
           [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
       - name: Update environment values only
-        uses: mikefarah/yq@v4.47.2
+        uses: mikefarah/yq@6251e95af8df3505def48c71f3119836701495d6 # v4.47.2
         env:
           IMAGE_FIELD: ${{ steps.images.outputs.field }}
           IMAGE_REPOSITORY: ${{ steps.images.outputs.repository }}
@@ -234,7 +234,7 @@ jobs:
           python scripts/validate_aws_deployment.py --check-images
       - name: Open GitOps image promotion pull request
         if: ${{ github.event_name == 'push' || inputs.create_promotion_pr }}
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: gitops/${{ env.COMPONENT }}-${{ github.sha }}

@@ -30,7 +30,22 @@ kubectl -n airflow exec deployment/airflow -c scheduler -- \
   python -m training.recovery export
 ```
 
-This does not train or change the champion alias. It writes a retained S3 backup.
+Then verify every retained byte independently of the source database:
+
+```sh
+kubectl -n airflow exec deployment/airflow -c scheduler -- \
+  python -m training.recovery verify
+```
+
+The verification must report the same recovery bundle identity as export. It
+checks the retained pointer/manifest, file paths, per-file and aggregate artifact
+hashes, and release provenance without connecting to MLflow or modifying S3.
+An existing champion is not a substitute for this check: restore deliberately
+skips when champion already exists. Do not tear down until export and verification
+both succeed. No one-time production export/verification was performed during
+this task.
+
+Export does not train or change the champion alias. It writes a retained S3 backup.
 The source must be READY, have passed artifact reload verification, and have
 valid, mutually consistent registry/release provenance. Do not manufacture
 missing provenance or export an unevaluated model to bypass these checks.
@@ -40,7 +55,8 @@ missing provenance or export an unevaluated model to bypass these checks.
 1. Restore the retained bucket and existing identities in Terraform, then the
    databases, MLflow service and Airflow runtime. Prefer an RDS snapshot when
    available: it preserves the full registry and experiment history.
-2. Once MLflow is healthy, run:
+2. Verify the retained bundle with `python -m training.recovery verify`. Once
+   MLflow is healthy, run:
 
    ```sh
    kubectl -n airflow exec deployment/airflow -c scheduler -- \
@@ -83,7 +99,8 @@ explicit reviewed persistence migration, not a routine teardown.
 .venv/bin/pytest -q tests/test_model_recovery.py
 ```
 
-Tests export a tiny fixture model, recover it into an empty temporary SQLite
+Tests verify the bundle without opening a registry, then recover a tiny fixture
+model into an empty temporary SQLite
 registry and load it through the real inference loader. They also cover repeated
 recovery, registry outages and corruption without AWS or production training.
 S3 calls are tested using a mock client; no production restore has been performed.

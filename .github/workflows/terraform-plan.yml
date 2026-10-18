@@ -42,13 +42,14 @@ jobs:
       group: terraform-production
       cancel-in-progress: false
     env:
+      EXPECTED_AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       TF_STATE_KEY: ${{ vars.TF_STATE_KEY }}
       TF_STATE_REGION: ${{ vars.AWS_REGION || 'eu-west-2' }}
       TF_PROD_TFVARS_JSON: ${{ secrets.TF_PROD_TFVARS_JSON }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
         with:
           role-to-assume: ${{ vars.AWS_TF_PLAN_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'eu-west-2' }}

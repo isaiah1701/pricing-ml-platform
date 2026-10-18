@@ -23,6 +23,7 @@ CORE_WORKLOADS = (
     "daemonset/kube-proxy",
     "daemonset/eks-pod-identity-agent",
     "deployment/ebs-csi-controller",
+    "daemonset/ebs-csi-node",
 )
 
 
@@ -145,7 +146,7 @@ def _workloads() -> list[dict[str, Any]]:
                 "get",
                 "deployments,statefulsets",
                 "-l",
-                "app.kubernetes.io/instance=argocd",
+                "app.kubernetes.io/part-of=argocd",
                 "-o",
                 "json",
             ]

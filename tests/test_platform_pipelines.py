@@ -36,6 +36,8 @@ def plan_bundle(tmp_path: Path) -> tuple[Path, Path, dict[str, Any]]:
     }
     metadata = {
         "schema_version": 1,
+        "environment": "production",
+        "aws_account": "123456789012",
         "repository": "isaiah1701/prod-mlops-platform",
         "source_sha": SHA,
         "run_id": "123",
@@ -60,12 +62,24 @@ def check_bundle(bundle: tuple[Path, Path, dict[str, Any]]) -> dict[str, Any]:
         backend=backend,
         terraform_version="1.11.0",
         lockfile=lock,
+        account="123456789012",
     )
 
 
 @pytest.mark.parametrize(
     "corruption",
-    ["plan", "commit", "repository", "run", "backend", "lock", "version", "expired"],
+    [
+        "plan",
+        "commit",
+        "repository",
+        "run",
+        "backend",
+        "lock",
+        "version",
+        "expired",
+        "account",
+        "environment",
+    ],
 )
 def test_apply_refuses_unreviewed_or_corrupt_plan(
     plan_bundle: tuple[Path, Path, dict[str, Any]],
@@ -89,6 +103,8 @@ def test_apply_refuses_unreviewed_or_corrupt_plan(
             "repository": "repository",
             "run": "run_id",
             "backend": "backend_sha256",
+            "account": "aws_account",
+            "environment": "environment",
             "version": "terraform_version",
         }[corruption]
         metadata[field] = "different"
@@ -114,6 +130,9 @@ def test_apply_uses_only_saved_binary_without_a_new_plan(
         "RUNNER_TEMP": str(tmp_path),
     }.items():
         monkeypatch.setenv(key, value)
+    monkeypatch.setattr(
+        terraform_ci, "expected_account", Mock(return_value="123456789012")
+    )
     monkeypatch.setattr(terraform_ci, "ROOT", lock.parent)
     runner = Mock(side_effect=[json.dumps({"terraform_version": "1.11.0"}), "", ""])
     monkeypatch.setattr(terraform_ci, "_run", runner)
@@ -148,6 +167,9 @@ def test_plan_captures_provenance_without_exporting_sensitive_values(
     }
     for key, value in environment.items():
         monkeypatch.setenv(key, value)
+    monkeypatch.setattr(
+        terraform_ci, "expected_account", Mock(return_value="123456789012")
+    )
     monkeypatch.setattr(terraform_ci, "ROOT", project)
 
     def fake_run(arguments: list[str], runtime: Path) -> str:
@@ -197,6 +219,9 @@ def application_status(revision: str) -> dict[str, Any]:
         },
         "status": {
             "operationState": {
+                "operation": {
+                    "info": [{"name": "mlops-request-id", "value": "test-request"}]
+                },
                 "phase": "Succeeded",
                 "syncResult": {"revision": revision},
             },
@@ -210,6 +235,11 @@ def test_gitops_waits_for_exact_reviewed_revision(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Do not mistake old healthy status for completion of the new deployment."""
+    monkeypatch.setattr(
+        sync_gitops.uuid,
+        "uuid4",
+        Mock(return_value=type("Request", (), {"hex": "test-request"})()),
+    )
     read = Mock(
         side_effect=[
             application_status("b" * 40),

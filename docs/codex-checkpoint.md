@@ -1,43 +1,67 @@
 # CI/CD refactor checkpoint
 
-## Active brief: complete CI/CD and GitOps bootstrap
+## Active brief: complete CI/CD and GitOps bootstrap — complete
 
-- Resume point: Phase A complete (`771e65f`); Phase B complete in this milestone
-  (`git log --oneline --grep='manual Helmfile Argo bootstrap'`).
-- Exactly seven entry workflows: ML Data, ML Training, ML Deploy, Docker,
-  Kubernetes, Terraform Plan and Terraform Apply. Removed k6 and consolidated
-  general Python checks into Docker so Bootstrap will be the eighth workflow.
-- Terraform handoff checks trusted run/commit/backend/provider lock/version,
-  plan checksum/age, protected manual Apply and shared concurrency; no replanning.
-- ML Deploy verifies/selects already approved versions via a manual Airflow DAG,
-  preserves rollback, checks artifact bytes/provenance, and reuses Kubernetes.
-  Initial gated registrations now carry promotion_status=approved. Docker runtime
-  includes the model metadata modules required by the deployment DAG.
-- Validation: **162 tests passed**, 14 dependency warnings; Ruff, actionlint and
-  production Helm lint passed. Cloud paths mocked; no AWS mutation, actual model
-  promotion, image build/push, deployment, full training or production load.
-- Previously committed training checkpoint support: `d52c838`; verified native
-  interrupted-fit resume plus completed-member reuse. S3 recovery remains
-  independent of checkpoints/RDS snapshots (`8341b87`).
-- Phase B: exactly eight workflows, with manual protected Bootstrap. Added the
-  first Helmfile, owning only the existing argocd release/chart/budget values.
-  Terraform retains EKS add-ons; Argo retains downstream controllers/apps.
-  Bootstrap checks AWS account/region/EKS identity, kubeconfig server, existing
-  Ready system capacity, foundation readiness, Helm ownership and root references.
-  Healthy existing Argo releases are preserved unless an upgrade is explicitly
-  requested. Root sync uses the reviewed Git SHA; pending apps are reported.
-- Phase B checks: 36 bootstrap/workflow/canary tests passed; the final missing-
-  namespace guard passed all 14 focused bootstrap tests. Real Helmfile 1.5.0
-  build and Argo chart 10.10.3 lint passed offline. Ruff, actionlint and shell
-  syntax/diff checks passed. No live Bootstrap or deployment was executed.
-- Next: Phase C — finish integration checks, explicit controller reconciliation,
-  deployed-image digest verification, model-refresh polling, backup verification
-  and recovery documentation. Run full regressions, then commit.
-- Prerequisites remain unverified: actual protected environment reviewers,
-  role permissions/OIDC, private runner reachability, Airflow bearer token,
-  existing Terraform backend/inputs, and one-time approved-model S3 export.
-- Preserve unrelated `README.md`, `load-tests/`, `skills/`. Do not push or run
-  live apply/bootstrap/deployment/autoscaling/model training/load tests.
+- Phase A: `771e65f` — independent workflow split, approved model selection,
+  reviewed Terraform binary-plan handoff, and removal of the k6 workflow.
+- Phase B: `ab2a603` — protected manual Helmfile/Argo bootstrap with account,
+  region, cluster, capacity, ownership and idempotence guards.
+- Phase C: completed in the commit titled
+  `ci: verify GitOps releases and retained model recovery end to end`.
+- Exactly eight workflows: **ML Data, ML Training, ML Deploy, Docker,
+  Terraform Plan, Terraform Apply, Bootstrap, Kubernetes**. Local k6 remains in
+  `tests/k6/`; there is no performance-testing workflow.
+- Bootstrap Helmfile owns only the existing argocd release/chart/budget values.
+  Terraform owns EKS add-ons; Argo owns downstream controllers and applications.
+  Healthy Argo releases are preserved unless upgrade is explicitly requested.
+- Kubernetes can reconcile declared controller Applications in dependency-wave
+  order, then platform/inference separately. Each sync checks its own operation
+  marker, exact revision, success and health. Inference checks reviewed image
+  references and actual ready pod digests, then polls for the selected model and
+  a valid prediction. Bootstrap and Kubernetes share deployment concurrency.
+- Terraform artifacts bind trusted main run/source, production/account/backend,
+  Terraform/provider lock and plan checksum/age. Apply rejects a plan if main has
+  advanced and consumes only the saved binary. Actions are pinned to commit SHAs.
+- ML Deploy accepts already approved models, validates provenance and artifact
+  bytes before alias selection, preserves rollback, and reuses Kubernetes.
+  It does not build images or run Terraform. Training remains explicitly gated.
+- Training checkpoints: `d52c838`, with native interrupted-fit resume and completed
+  member reuse. PVC checkpoints are not durable teardown backups.
+- Recovery: `8341b87`, plus read-only `training.recovery verify` in Phase C.
+  Verification reads retained bytes without the source registry. Tests restore
+  into an empty registry and load predictions without training or an RDS snapshot.
+- Final regression result: **194 passed**, 14 dependency warnings, no failures.
+  Ruff, actionlint, default/production/bootstrap Helm lint, Helmfile 1.5.0 build
+  and actual pinned Argo chart 10.10.3 lint, and diff checks passed. An initial
+  Helm command used a nonexistent values filename; corrected to the real nested
+  values paths and all three variants passed.
+- No live AWS mutation, Bootstrap, deployment, model promotion/export/restore,
+  production inference/load, autoscaling or full training was executed. Cloud
+  integration tests use mocks/fixtures. Local Docker daemon unavailable; actual
+  image builds/scans remain a CI prerequisite.
+- Unverified production prerequisites: protected environment reviewers/main
+  restrictions; least-privilege OIDC roles and AWS_ACCOUNT_ID; private runner
+  reachability; Airflow token; backend/production inputs; immutable image/runtime
+  availability; current cluster readiness and actual retained recovery bundle.
+- **Current champion still requires a one-time production export and independent
+  verify before any teardown.** No production backup is claimed by this task.
+- Preserve unrelated `README.md`, `load-tests/`, `skills/`. No push performed.
+
+### Exact continuation
+
+Implementation is complete. For any separately authorized live recovery session,
+read `docs/bootstrap.md`, `docs/model-recovery.md`, `docs/pipelines.md` and
+`docs/AWS_PRODUCTION_LAUNCH.md` first. Verify/export the existing champion before
+teardown; review the exact Terraform plan; explicitly approve Apply; reconcile
+fresh non-secret infrastructure coordinates in Git; manually Bootstrap; use
+Kubernetes for controllers then platform; restore champion/features; deploy and
+verify inference. Do not substitute retraining for recovery. Obtain explicit live
+execution authorization before these operations; do not push without instruction.
+
+## Archived implementation history
+
+The sections below describe previous milestones; their old next-step instructions
+and workflow names are historical. Use the active brief above for current state.
 
 ## Follow-up: training checkpoints and workflow separation
 

@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -73,6 +74,25 @@ def _run(arguments: list[str], runtime: Path) -> str:
     return result.stdout
 
 
+def expected_account() -> str:
+    """Bind infrastructure operations to the explicitly configured AWS account."""
+    expected = os.environ.get("EXPECTED_AWS_ACCOUNT_ID", "")
+    if not re.fullmatch(r"[0-9]{12}", expected):
+        raise ValueError(
+            "Configure EXPECTED_AWS_ACCOUNT_ID before planning or applying"
+        )
+    identity = json.loads(
+        subprocess.check_output(
+            ["aws", "sts", "get-caller-identity", "--output", "json"], text=True
+        )
+    )
+    if identity.get("Account") != expected:
+        raise ValueError(
+            "Authenticated AWS account differs from the reviewed production target"
+        )
+    return expected
+
+
 def verify_plan(
     directory: Path,
     *,
@@ -82,11 +102,14 @@ def verify_plan(
     backend: dict[str, Any],
     terraform_version: str,
     lockfile: Path,
+    account: str,
 ) -> dict[str, Any]:
     """Reject mismatched, expired, corrupted or differently configured plans before init/apply."""
     metadata = json.loads((directory / "metadata.json").read_text())
     expected = {
         "schema_version": 1,
+        "environment": "production",
+        "aws_account": account,
         "repository": repository,
         "source_sha": source_sha,
         "run_id": run_id,
@@ -109,6 +132,7 @@ def verify_plan(
 def execute(operation: str, directory: Path) -> None:
     """Plan from explicit production inputs or apply the verified saved binary without replanning."""
     backend = backend_configuration()
+    account = expected_account()
     runtime = Path(os.environ["RUNNER_TEMP"]) / "mlops-terraform-runtime"
     runtime.mkdir(mode=0o700, parents=True, exist_ok=True)
     runtime.chmod(0o700)
@@ -124,6 +148,7 @@ def execute(operation: str, directory: Path) -> None:
             backend=backend,
             terraform_version=version,
             lockfile=lockfile,
+            account=account,
         )
     elif operation != "plan":
         raise ValueError("Unsupported Terraform operation")
@@ -135,7 +160,11 @@ def execute(operation: str, directory: Path) -> None:
             raise ValueError(
                 "Configure TF_PROD_TFVARS_JSON with the actual production inputs"
             ) from exc
-        if not isinstance(values, dict) or values.get("cost_optimized") is not True:
+        if (
+            not isinstance(values, dict)
+            or values.get("cost_optimized") is not True
+            or values.get("aws_region", "eu-west-2") != "eu-west-2"
+        ):
             raise ValueError(
                 "Production CI requires explicit inputs with cost_optimized=true"
             )
@@ -173,6 +202,8 @@ def execute(operation: str, directory: Path) -> None:
     )
     metadata = {
         "schema_version": 1,
+        "environment": "production",
+        "aws_account": account,
         "repository": os.environ["GITHUB_REPOSITORY"],
         "source_sha": os.environ["GITHUB_SHA"],
         "run_id": os.environ["GITHUB_RUN_ID"],

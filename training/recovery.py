@@ -9,6 +9,8 @@ import logging
 import os
 import re
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
@@ -207,18 +209,12 @@ def export_approved(
     return identity
 
 
-def restore_approved(
-    client: MlflowClient, store: str, name: str, alias: str = "champion"
-) -> str:
-    """Restore a missing alias from verified bytes without training or replacing an existing alias."""
+@contextmanager
+def _verified_bundle(
+    store: str, name: str, alias: str
+) -> Iterator[tuple[dict[str, Any], Path, str]]:
+    """Read and verify a complete recovery bundle without accessing any registry database."""
     _validate_identity(store, name, alias)
-    existing = _alias(client, name, alias)
-    if existing is not None:
-        LOGGER.info(
-            "Approved alias already exists at version %s; recovery skipped",
-            existing.version,
-        )
-        return str(existing.version)
     pointer = json.loads(_read(store, f"aliases/{name}/{alias}.json"))
     identity = pointer["bundle_sha256"]
     if not isinstance(identity, str) or not re.fullmatch(r"[0-9a-f]{64}", identity):
@@ -237,7 +233,7 @@ def restore_approved(
     _verify_provenance(
         manifest["tags"], manifest["release_bundle"], manifest["original_run_id"]
     )
-    LOGGER.info("Restoring approved model from recovery bundle %s", identity)
+    LOGGER.info("Verifying retained recovery bundle %s", identity)
     with tempfile.TemporaryDirectory(prefix="model-restore-") as temporary:
         model_path = Path(temporary) / "model"
         for relative, digest in manifest["files"].items():
@@ -260,6 +256,34 @@ def restore_approved(
             or sha256_directory(model_path) != manifest["tags"]["model_artifact_sha256"]
         ):
             raise ValueError("Recovery model directory checksum mismatch")
+        yield manifest, model_path, identity
+
+
+def verify_backup(store: str, name: str, alias: str = "champion") -> str:
+    """Verify retained metadata and model bytes without modifying S3 or the registry."""
+    with _verified_bundle(store, name, alias) as (manifest, _model_path, identity):
+        LOGGER.info(
+            "Verified recovery bundle %s for original version %s",
+            identity,
+            manifest["original_version"],
+        )
+        return identity
+
+
+def restore_approved(
+    client: MlflowClient, store: str, name: str, alias: str = "champion"
+) -> str:
+    """Restore a missing alias from verified bytes without training or replacing an existing alias."""
+    _validate_identity(store, name, alias)
+    existing = _alias(client, name, alias)
+    if existing is not None:
+        LOGGER.info(
+            "Approved alias already exists at version %s; recovery skipped",
+            existing.version,
+        )
+        return str(existing.version)
+    with _verified_bundle(store, name, alias) as (manifest, model_path, identity):
+        LOGGER.info("Restoring approved model from recovery bundle %s", identity)
         # No registry mutation occurs until all bytes and provenance pass checks.
         matches = [
             version
@@ -346,10 +370,10 @@ def persist_if_configured(client: MlflowClient, name: str, alias: str) -> None:
 
 
 def main() -> None:
-    """Export or restore the approved alias using the configured MLflow and S3 identities."""
+    """Export, verify or restore the approved alias using configured storage identities."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["export", "restore"])
+    parser.add_argument("operation", choices=["export", "verify", "restore"])
     parser.add_argument(
         "--store",
         default=os.getenv("APPROVED_MODEL_STORE"),
@@ -358,6 +382,9 @@ def main() -> None:
     parser.add_argument("--name", default="airbnb-price-predictor")
     parser.add_argument("--alias", default="champion")
     args = parser.parse_args()
+    if args.operation == "verify":
+        verify_backup(args.store, args.name, args.alias)
+        return
     client = MlflowClient()
     operation = export_approved if args.operation == "export" else restore_approved
     operation(client, args.store, args.name, args.alias)

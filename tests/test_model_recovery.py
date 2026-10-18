@@ -19,7 +19,13 @@ from sklearn.dummy import DummyRegressor
 from serving.app.config import Settings
 from serving.app.model_loader import load_champion_model
 from training.provenance import sha256_directory
-from training.recovery import _read, _write, export_approved, restore_approved
+from training.recovery import (
+    _read,
+    _write,
+    export_approved,
+    restore_approved,
+    verify_backup,
+)
 from training.registry import tag_version_before_alias
 
 LOGGER = logging.getLogger(__name__)
@@ -196,3 +202,15 @@ def test_s3_store_uses_existing_prefix_and_encryption(
     client.get_object.side_effect = None
     client.get_object.return_value = {"Body": body}
     assert _read("s3://existing/snapshots/approved-models", "manifest.json") == b"{}"
+
+
+def test_retained_bundle_can_be_verified_without_a_registry(
+    approved_store: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify S3/local backup bytes independently of the original MLflow database."""
+    client = Mock(side_effect=AssertionError("verification must not open a registry"))
+    monkeypatch.setattr("training.recovery.MlflowClient", client)
+    identity = verify_backup(str(approved_store), NAME)
+    assert len(identity) == 64
+    client.assert_not_called()

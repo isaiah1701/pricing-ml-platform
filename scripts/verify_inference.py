@@ -6,7 +6,9 @@ import json
 import logging
 import math
 import os
+import time
 from pathlib import Path
+from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
@@ -53,7 +55,8 @@ def verify(url: str, expected_version: str = "") -> None:
         or price < 0
         or prediction.get("model_version") != ready["version"]
         or prediction.get("model_alias") != "champion"
-        or not prediction.get("prediction_id")
+        or not isinstance(prediction.get("prediction_id"), str)
+        or not prediction["prediction_id"]
     ):
         LOGGER.error("Inference response did not match the ready approved model")
         raise ValueError("Approved-model inference verification failed")
@@ -63,10 +66,29 @@ def verify(url: str, expected_version: str = "") -> None:
     )
 
 
+def wait_for_inference(
+    url: str, expected_version: str = "", *, timeout: float = 180
+) -> None:
+    """Allow the existing model refresh interval before failing a release check."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            verify(url, expected_version)
+            return
+        except (ValueError, URLError, TimeoutError):
+            LOGGER.info("Waiting for the approved model and inference readiness")
+            time.sleep(5)
+    raise TimeoutError(
+        "Approved-model inference did not become ready before the release deadline"
+    )
+
+
 def main() -> None:
-    """Run the lightweight post-deployment verification without retraining."""
+    """Run bounded post-deployment checks without retraining or image builds."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    verify(os.environ["SERVING_URL"], os.environ.get("EXPECTED_MODEL_VERSION", ""))
+    wait_for_inference(
+        os.environ["SERVING_URL"], os.environ.get("EXPECTED_MODEL_VERSION", "")
+    )
 
 
 if __name__ == "__main__":

@@ -197,7 +197,7 @@ for the Certificate to become Ready before launching. For testing, set
 `ingress.acmeServer=https://acme-staging-v02.api.letsencrypt.org/directory`; staging
 certificates are not browser-trusted. No ACM certificate is needed.
 
-## 7. Create the first governed champion
+## 7. Restore the approved champion before considering training
 
 Airflow runs API server, scheduler, DAG processor, and triggerer in separate
 containers in one pod, using LocalExecutor and the shared RWO data volume. The
@@ -216,9 +216,22 @@ stored Airflow connections. Reset user passwords through FAB rather than deletin
 the runtime Secret. The initial admin identity can be configured with
 `platform.airflow.adminUsername` and `platform.airflow.adminEmail`.
 
-The production MLflow registry starts empty. Port-forward Airflow or use an
-approved internal access path, trigger `airbnb_feature_build`, and then trigger
-`airbnb_model_training`. The training DAG:
+A recreated MLflow database can start empty even when retained S3 artifacts
+exist. Verify and restore the approved recovery bundle as documented in
+[model-recovery.md](model-recovery.md); this works without the original RDS
+snapshot. Run the data DAG to recover offline/Redis features if needed, then
+select the restored champion through ML Deploy. Do not trigger training as an
+implicit launch/recovery step. Existing local runbooks that say to train at every
+launch must follow this recovery branch first.
+
+Before any teardown, the current production model needs a one-time export and
+read-only verification in the new recovery format. This has not been performed
+by the CI/CD implementation session. PVC CatBoost snapshots alone do not provide
+durable disaster recovery when the volume is deleted.
+
+Only when no approved recoverable model exists, and after an explicit training
+request, use Airflow through an approved internal access path: trigger
+`airbnb_feature_build`, then `airbnb_model_training`. The training DAG:
 
 1. validates and freezes the dataset;
 2. records code, data, attempt, and model hashes;
