@@ -36,8 +36,22 @@ def test_only_approved_version_can_be_selected(
     )
     client = Mock()
     client.tracking_uri = "http://mlflow.test:5000"
-    client.get_model_version_by_alias.return_value = current
-    client.get_model_version.return_value = selected
+    client.get_model_version_by_alias.side_effect = lambda name, alias: current
+    client.get_model_version.side_effect = lambda name, version: (
+        selected
+        if version == "2"
+        else SimpleNamespace(**{**vars(selected), "version": "1"})
+    )
+
+    def set_alias(name: str, alias: str, version: str) -> None:
+        """Apply champion writes to the in-memory registry."""
+        if alias == "champion":
+            current.version = version
+
+    client.set_registered_model_alias.side_effect = set_alias
+    monkeypatch.setenv("AIRBNB_PROMOTION_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setattr("training.deployment.verify_serving_version", Mock())
+    monkeypatch.setattr("training.deployment._event", Mock())
     client.get_run.return_value = SimpleNamespace(
         info=SimpleNamespace(status="FINISHED"),
         data=SimpleNamespace(tags={"artifact_reload_verified": "true"}),

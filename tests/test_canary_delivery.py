@@ -77,11 +77,27 @@ def test_failed_analysis_aborts_without_retargeting_stable_service(
         "prediction-error-rate",
         "prediction-p95-latency",
     }
-    assert all(metric["failureLimit"] == 1 for metric in analysis["spec"]["metrics"])
+    assert all(metric["failureLimit"] == 0 for metric in analysis["spec"]["metrics"])
     assert all(
         "result[0] <=" in metric["successCondition"]
         for metric in analysis["spec"]["metrics"]
     )
+    assert all(
+        "len(result) > 0 && !isNaN" in metric["successCondition"]
+        for metric in analysis["spec"]["metrics"]
+    )
+    assert all(
+        "len(result) == 0 || isNaN" in metric["failureCondition"]
+        for metric in analysis["spec"]["metrics"]
+    )
+    assert all(
+        ">= 20" in metric["provider"]["prometheus"]["query"]
+        for metric in analysis["spec"]["metrics"]
+    )
+    rollout = _resource(rendered_resources, "Rollout", "airbnb-inference")
+    assert rollout["spec"]["revisionHistoryLimit"] >= 2
+    assert rollout["spec"]["strategy"]["canary"]["dynamicStableScale"] is False
+    assert rollout["spec"]["strategy"]["canary"]["abortScaleDownDelaySeconds"] > 0
     stable = _resource(rendered_resources, "Service", "airbnb-inference")
     canary = _resource(rendered_resources, "Service", "airbnb-inference-canary")
     assert stable["spec"]["selector"] == canary["spec"]["selector"]
@@ -115,9 +131,7 @@ def test_https_uses_cert_manager_secret_and_traefik(
     assert certificate["spec"]["dnsNames"] == ["platf0rm.site"]
     root_route, application_route = route["spec"]["routes"]
     assert root_route["match"] == "Host(`platf0rm.site`) && Path(`/`)"
-    assert root_route["middlewares"] == [
-        {"name": "airbnb-inference-root-redirect"}
-    ]
+    assert root_route["middlewares"] == [{"name": "airbnb-inference-root-redirect"}]
     assert application_route["match"] == "Host(`platf0rm.site`)"
     assert middleware["spec"]["redirectRegex"] == {
         "regex": "^https://[^/]+/?$",
@@ -150,3 +164,44 @@ def test_https_uses_cert_manager_secret_and_traefik(
     assert [
         service["name"] for service in weighted["spec"]["weighted"]["services"]
     ] == ["airbnb-inference", "airbnb-inference-canary"]
+
+
+def test_gitops_preserves_rollouts_owned_routing_fields() -> None:
+    """Scope drift exclusions to the exact fields the traffic controller mutates."""
+    helm = shutil.which("helm")
+    if helm is None:
+        pytest.skip("helm is not installed")
+    rendered = subprocess.run(
+        [
+            helm,
+            "template",
+            "airbnb-gitops",
+            str(CHART_PATH),
+            "-f",
+            str(CHART_PATH / "values/bootstrap.yaml"),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    resources = [item for item in yaml.safe_load_all(rendered.stdout) if item]
+    app = _resource(resources, "Application", "airbnb-inference")
+    assert "RespectIgnoreDifferences=true" in app["spec"]["syncPolicy"]["syncOptions"]
+    rules = app["spec"]["ignoreDifferences"]
+    assert len(rules) == 3
+    assert {rule["name"] for rule in rules if rule["kind"] == "Service"} == {
+        "airbnb-inference",
+        "airbnb-inference-canary",
+    }
+    assert all(rule["namespace"] == "airbnb-inference" for rule in rules)
+    for rule in rules:
+        if rule["kind"] == "Service":
+            assert rule["jsonPointers"] == ["/spec/selector/rollouts-pod-template-hash"]
+        else:
+            assert rule["group"] == "traefik.io"
+            assert rule["kind"] == "TraefikService"
+            assert rule["name"] == "airbnb-inference"
+            assert rule["jsonPointers"] == [
+                "/spec/weighted/services/0/weight",
+                "/spec/weighted/services/1/weight",
+            ]

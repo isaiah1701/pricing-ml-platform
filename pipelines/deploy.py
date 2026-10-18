@@ -10,6 +10,7 @@ from typing import Any
 from airflow.sdk import DAG, dag, get_current_context, task
 from mlflow import MlflowClient
 
+from monitoring.operational_metrics import pipeline_failure, pipeline_success
 from training.deployment import deploy_approved_version
 
 LOGGER = logging.getLogger(__name__)
@@ -25,7 +26,10 @@ def select_approved_model() -> str:
         raise TypeError("model_version must be a registry version string")
     client = MlflowClient(tracking_uri=os.environ["MLFLOW_TRACKING_URI"])
     return deploy_approved_version(
-        client, os.getenv("MODEL_NAME", "airbnb-price-predictor"), version
+        client,
+        os.getenv("MODEL_NAME", "airbnb-price-predictor"),
+        version,
+        operation_id=str(context["dag_run"].run_id),
     )
 
 
@@ -34,6 +38,8 @@ def select_approved_model() -> str:
     schedule=None,
     start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
     catchup=False,
+    on_success_callback=pipeline_success,
+    on_failure_callback=pipeline_failure,
     max_active_runs=1,
     tags=["airbnb", "deployment", "approval"],
 )

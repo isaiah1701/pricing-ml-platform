@@ -12,24 +12,32 @@ spec:
     - name: prediction-error-rate
       interval: {{ .Values.rollout.analysisInterval }}
       count: {{ .Values.rollout.analysisCount }}
-      failureLimit: 1
-      successCondition: len(result) == 0 || result[0] <= {{ .Values.rollout.errorRateThreshold }}
+      failureLimit: 0
+      successCondition: len(result) > 0 && !isNaN(result[0]) && result[0] <= {{ .Values.rollout.errorRateThreshold }}
+      failureCondition: len(result) == 0 || isNaN(result[0]) || result[0] > {{ .Values.rollout.errorRateThreshold }}
       provider:
         prometheus:
           address: {{ .Values.prometheus.address | quote }}
           query: |
-            sum(rate(airbnb_http_requests_total{endpoint="/predict",status=~"5..",service="{{`{{args.canary-service}}`}}"}[2m]))
-            /
-            clamp_min(sum(rate(airbnb_http_requests_total{endpoint="/predict",service="{{`{{args.canary-service}}`}}"}[2m])), 0.001)
+            (
+              (sum(max by (namespace, pod, status) (increase(airbnb_http_requests_total{endpoint="/predict",status=~"5..",service="{{`{{args.canary-service}}`}}"}[2m]))) or vector(0))
+              /
+              sum(max by (namespace, pod, status) (increase(airbnb_http_requests_total{endpoint="/predict",service="{{`{{args.canary-service}}`}}"}[2m])))
+            )
+            and on ()
+            (sum(max by (namespace, pod, status) (increase(airbnb_http_requests_total{endpoint="/predict",service="{{`{{args.canary-service}}`}}"}[2m]))) >= {{ .Values.rollout.minimumRequests }})
     - name: prediction-p95-latency
       interval: {{ .Values.rollout.analysisInterval }}
       count: {{ .Values.rollout.analysisCount }}
-      failureLimit: 1
-      successCondition: len(result) == 0 || isNaN(result[0]) || result[0] <= {{ .Values.rollout.p95LatencyThresholdSeconds }}
+      failureLimit: 0
+      successCondition: len(result) > 0 && !isNaN(result[0]) && result[0] <= {{ .Values.rollout.p95LatencyThresholdSeconds }}
+      failureCondition: len(result) == 0 || isNaN(result[0]) || result[0] > {{ .Values.rollout.p95LatencyThresholdSeconds }}
       provider:
         prometheus:
           address: {{ .Values.prometheus.address | quote }}
           query: |
             histogram_quantile(0.95,
-              sum by (le) (rate(airbnb_prediction_latency_seconds_bucket{service="{{`{{args.canary-service}}`}}"}[2m])))
+              sum by (le) (max by (namespace, pod, le) (rate(airbnb_prediction_latency_seconds_bucket{service="{{`{{args.canary-service}}`}}"}[2m]))))
+            and on ()
+            (sum(max by (namespace, pod) (increase(airbnb_prediction_latency_seconds_count{service="{{`{{args.canary-service}}`}}"}[2m]))) >= {{ .Values.rollout.minimumRequests }})
 {{- end }}

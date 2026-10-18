@@ -15,8 +15,14 @@ import pandas as pd
 from airflow.sdk import DAG, dag, task
 from airflow.sdk.exceptions import AirflowSkipException
 from mlflow import MlflowClient
+from mlflow.exceptions import MlflowException
 from sklearn.model_selection import train_test_split
 
+from monitoring.operational_metrics import (
+    pipeline_failure,
+    pipeline_success,
+    publish_offline_evaluation,
+)
 from training.lineage import publish_dataset_snapshot, verify_dataset_snapshot
 from training.recovery import persist_if_configured
 from training.registry import tag_version_before_alias
@@ -364,6 +370,7 @@ def log_models_to_mlflow(evaluation: EvaluationResult) -> LoggedCandidate:
         training_attempt_id=evaluation["training_attempt_id"],
     )
     candidate = trained["candidate"]
+    publish_offline_evaluation("challenger", evaluation["candidate_metrics"])
     report = log_model_run(
         candidate,
         trained["x_train"],
@@ -433,14 +440,35 @@ def conditional_registration(candidate: LoggedCandidate) -> dict[str, str]:
         "dataset_sha256": candidate["dataset_sha256"],
         "model_artifact_sha256": candidate["model_artifact_sha256"],
     }
-    tag_version_before_alias(
-        client,
-        REGISTERED_MODEL_NAME,
-        str(version.version),
-        MODEL_ALIAS,
-        provenance_tags,
-    )
-    persist_if_configured(client, REGISTERED_MODEL_NAME, MODEL_ALIAS)
+    try:
+        current_champion = client.get_model_version_by_alias(
+            REGISTERED_MODEL_NAME, MODEL_ALIAS
+        )
+    except MlflowException as exc:
+        if exc.error_code != "RESOURCE_DOES_NOT_EXIST":
+            raise
+        current_champion = None
+    if current_champion is None:
+        tag_version_before_alias(
+            client,
+            REGISTERED_MODEL_NAME,
+            str(version.version),
+            MODEL_ALIAS,
+            provenance_tags,
+        )
+        persist_if_configured(client, REGISTERED_MODEL_NAME, MODEL_ALIAS)
+        publish_offline_evaluation(
+            "champion", client.get_run(candidate["run_id"]).data.metrics
+        )
+    else:
+        for key, value in provenance_tags.items():
+            client.set_model_version_tag(
+                REGISTERED_MODEL_NAME, str(version.version), key, value
+            )
+        LOGGER.info(
+            "Candidate registered; existing champion %s retained until approved ML Deploy",
+            current_champion.version,
+        )
     update_training_attempt(
         MLFLOW_TRACKING_URI,
         candidate["training_attempt_id"],
@@ -458,7 +486,8 @@ def conditional_registration(candidate: LoggedCandidate) -> dict[str, str]:
     start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
     catchup=False,
     max_active_runs=1,
-    on_failure_callback=mark_training_pipeline_failure,
+    on_success_callback=pipeline_success,
+    on_failure_callback=[mark_training_pipeline_failure, pipeline_failure],
     tags=["airbnb", "training", "feast", "mlflow"],
 )
 def training_pipeline() -> None:

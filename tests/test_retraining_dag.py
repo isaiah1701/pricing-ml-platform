@@ -32,9 +32,10 @@ def test_retraining_dag_uses_native_approval_and_rollback_path() -> None:
     training_approval = retraining_dag.task_dict["approve_expensive_training"]
     assert isinstance(training_approval, ApprovalOperator)
     assert training_approval.upstream_task_ids == {"load_retraining_event"}
-    assert "approve_expensive_training" in retraining_dag.task_dict[
-        "train_and_compare"
-    ].upstream_task_ids
+    assert (
+        "approve_expensive_training"
+        in retraining_dag.task_dict["train_and_compare"].upstream_task_ids
+    )
     approval = retraining_dag.task_dict["approve_production_promotion"]
     assert isinstance(approval, ApprovalOperator)
     assert approval.upstream_task_ids == {"register_challenger"}
@@ -45,4 +46,5 @@ def test_retraining_dag_uses_native_approval_and_rollback_path() -> None:
     assert retraining_dag.task_dict["rollback_promotion"].upstream_task_ids == {
         "deployment_gate",
         "promote_to_production",
+        "run_post_promotion_checks",
     }

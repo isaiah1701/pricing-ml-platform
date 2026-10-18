@@ -2,26 +2,36 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import math
 import os
 import pickle
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TypedDict
 
 import mlflow
 import mlflow.sklearn
-import numpy as np
-import requests
 from airflow.providers.standard.operators.hitl import ApprovalOperator
 from airflow.sdk import DAG, Asset, dag, task
 from mlflow import MlflowClient
 from sklearn.model_selection import train_test_split
 
+from monitoring.operational_metrics import (
+    pipeline_failure,
+    pipeline_success,
+    publish_model_event,
+    publish_offline_evaluation,
+)
+from training.deployment import (
+    begin_promotion,
+    complete_promotion,
+    rollback_promotion_verified,
+    verify_serving_version,
+)
 from training.lineage import publish_dataset_snapshot, verify_dataset_snapshot
-from training.recovery import persist_if_configured
 from training.registry import tag_version_before_alias
 from training.train import (
     ENTITY_COLUMNS,
@@ -45,13 +55,21 @@ from training.validation import require_valid_dataset
 LOGGER = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RETRAINING_EVENT_ASSET = Asset("airbnb_retraining_event")
-EVENT_DIR = Path(
-    os.getenv("RETRAINING_EVENT_DIR", PROJECT_ROOT / "monitoring" / "retraining-events")
-).expanduser().resolve()
+EVENT_DIR = (
+    Path(
+        os.getenv(
+            "RETRAINING_EVENT_DIR", PROJECT_ROOT / "monitoring" / "retraining-events"
+        )
+    )
+    .expanduser()
+    .resolve()
+)
 WORK_DIR = Path(os.getenv("AIRBNB_RETRAINING_WORK_DIR", "/tmp/airbnb-retraining"))
-SNAPSHOT_ROOT = Path(
-    os.getenv("AIRBNB_SNAPSHOT_ROOT", PROJECT_ROOT / "data" / "snapshots")
-).expanduser().resolve()
+SNAPSHOT_ROOT = (
+    Path(os.getenv("AIRBNB_SNAPSHOT_ROOT", PROJECT_ROOT / "data" / "snapshots"))
+    .expanduser()
+    .resolve()
+)
 MLFLOW_TRACKING_URI = os.getenv(
     "MLFLOW_TRACKING_URI", f"sqlite:///{PROJECT_ROOT / 'mlflow.db'}"
 )
@@ -70,9 +88,7 @@ KEY_SEGMENT_METRICS: tuple[str, ...] = (
     "mae_ordinary_market",
 )
 SERVING_URL = os.getenv("SERVING_URL", "http://airbnb-price-predictor")
-POST_PROMOTION_P95_SECONDS = float(
-    os.getenv("POST_PROMOTION_P95_SECONDS", "0.25")
-)
+POST_PROMOTION_P95_SECONDS = float(os.getenv("POST_PROMOTION_P95_SECONDS", "0.25"))
 POST_PROMOTION_ATTEMPTS = int(os.getenv("POST_PROMOTION_ATTEMPTS", "12"))
 
 
@@ -115,6 +131,8 @@ class PromotionResult(TypedDict):
     promoted_version: str
     approved_by: str
     approved_at: str
+    operation_id: str
+    status: str
 
 
 class DeploymentCheckResult(TypedDict):
@@ -144,6 +162,17 @@ def evaluate_promotion_gates(
         return {
             "passed": False,
             "rejection_reasons": [f"missing comparison metrics: {missing}"],
+            "mae_improvement": float("nan"),
+        }
+    if any(
+        not math.isfinite(metrics[key])
+        for metrics in (champion_metrics, challenger_metrics)
+        for key in required
+    ):
+        LOGGER.warning("Non-finite offline comparison metrics block promotion")
+        return {
+            "passed": False,
+            "rejection_reasons": ["non-finite comparison metrics"],
             "mae_improvement": float("nan"),
         }
     improvement = champion_metrics["mae"] - challenger_metrics["mae"]
@@ -189,48 +218,40 @@ def promote_registered_challenger(
     rollback_alias: str,
     challenger_version: str,
     approval_response: object,
+    expected_previous: str = "",
 ) -> PromotionResult:
-    """Save the rollback target and atomically repoint the production alias."""
+    """Validate approved artifacts and save an interruption-safe promotion receipt."""
     approved_by, approved_at = require_approval(approval_response)
-    current = client.get_model_version_by_alias(model_name, production_alias)
-    previous_version = str(current.version)
-    client.set_registered_model_alias(model_name, rollback_alias, previous_version)
-    client.set_registered_model_alias(
-        model_name, production_alias, str(challenger_version)
-    )
-    for key, value in {
-        "promotion_status": "approved",
-        "approved_by": approved_by,
-        "approved_at": approved_at,
-        "previous_production_version": previous_version,
-    }.items():
-        client.set_model_version_tag(model_name, str(challenger_version), key, value)
-    return {
-        "model_name": model_name,
-        "previous_version": previous_version,
-        "promoted_version": str(challenger_version),
-        "approved_by": approved_by,
-        "approved_at": approved_at,
-    }
+    operation = hashlib.sha256(
+        f"{model_name}:{challenger_version}:{approved_by}:{approved_at}".encode()
+    ).hexdigest()
+    return begin_promotion(
+        client,
+        model_name,
+        challenger_version,
+        operation_id=operation,
+        approved_by=approved_by,
+        approved_at=approved_at,
+        production_alias=production_alias,
+        rollback_alias=rollback_alias,
+        expected_previous=expected_previous,
+    )  # type: ignore[return-value]
 
 
 def restore_previous_alias(
     client: Any,
     promotion: PromotionResult,
     production_alias: str,
+    reason: str = "post-promotion serving validation failed",
 ) -> str:
-    """Restore the saved production version and record rollback metadata."""
-    previous = promotion["previous_version"]
-    client.set_registered_model_alias(
-        promotion["model_name"], production_alias, previous
+    """Restore the saved production model and verify its actual serving predictions."""
+    return rollback_promotion_verified(
+        client,
+        dict(promotion),
+        production_alias=production_alias,
+        reason=reason,
+        verifier=verify_serving_version,
     )
-    client.set_model_version_tag(
-        promotion["model_name"],
-        promotion["promoted_version"],
-        "promotion_status",
-        "rolled_back",
-    )
-    return previous
 
 
 def deployment_checks_pass(result: DeploymentCheckResult) -> bool:
@@ -310,18 +331,17 @@ def train_and_compare(event: dict[str, object]) -> ChallengerEvaluation:
         champion_version = str(
             client.get_model_version_by_alias(MODEL_NAME, PRODUCTION_ALIAS).version
         )
-        champion = mlflow.sklearn.load_model(
-            f"models:/{MODEL_NAME}/{champion_version}"
-        )
+        champion = mlflow.sklearn.load_model(f"models:/{MODEL_NAME}/{champion_version}")
         challenger = CatBoostPriceEnsembleRegressor(tuple(feature_names))
         challenger.fit(x_train, y_train)
-        champion_metrics = evaluate_segments(
-            x_test, y_test, champion.predict(x_test)
-        )
+        champion_metrics = evaluate_segments(x_test, y_test, champion.predict(x_test))
         challenger_metrics = evaluate_segments(
             x_test, y_test, challenger.predict(x_test)
         )
         gate = evaluate_promotion_gates(champion_metrics, challenger_metrics)
+        publish_offline_evaluation("champion", champion_metrics)
+        publish_offline_evaluation("challenger", challenger_metrics)
+        publish_model_event("retraining", attempt_id)
         mlflow.set_experiment(experiment_name)
         logged = log_model_run(
             challenger,
@@ -465,90 +485,54 @@ def promote_to_production(
         ROLLBACK_ALIAS,
         challenger["challenger_version"],
         approval_response,
+        expected_previous=challenger["champion_version"],
     )
 
 
 @task(retries=0)
 def run_post_promotion_checks(promotion: PromotionResult) -> DeploymentCheckResult:
-    """Verify serving refresh, prediction validity, and p95 latency after promotion."""
-    reasons: list[str] = []
-    observed_version: str | None = None
-    latencies: list[float] = []
-    payload = {
-        "neighbourhood_group": "Manhattan",
-        "neighbourhood": "Midtown",
-        "latitude": 40.758,
-        "longitude": -73.9855,
-        "room_type": "Entire home/apt",
-        "minimum_nights": 2,
-        "number_of_reviews": 10,
-        "reviews_per_month": 1.25,
-        "calculated_host_listings_count": 1,
-        "availability_365": 120,
-        "has_reviews": 1,
-        "days_since_last_review": 30,
-        "minimum_nights_band": "short",
-        "availability_band": "medium",
-        "location_cell": "40.76_-73.99",
-        "distance_to_midtown_km": 0.0,
-    }
-    for attempt in range(POST_PROMOTION_ATTEMPTS):
-        try:
-            ready = requests.get(f"{SERVING_URL}/ready", timeout=3)
-            ready.raise_for_status()
-            observed_version = str(ready.json().get("version"))
-            if observed_version != promotion["promoted_version"]:
-                if attempt + 1 < POST_PROMOTION_ATTEMPTS:
-                    time.sleep(5)
-                    continue
-                reasons.append("serving did not observe the promoted alias version")
-                break
-            for _ in range(20):
-                started = time.perf_counter()
-                response = requests.post(
-                    f"{SERVING_URL}/predict", json=payload, timeout=3
-                )
-                latencies.append(time.perf_counter() - started)
-                response.raise_for_status()
-                body = response.json()
-                price = float(body["predicted_price"])
-                if not np.isfinite(price) or price < 0:
-                    reasons.append("serving returned an invalid model prediction")
-                    break
-                if str(body.get("model_version")) != promotion["promoted_version"]:
-                    reasons.append("prediction response reported the wrong model version")
-                    break
-            break
-        except (requests.RequestException, ValueError, KeyError) as exc:
-            LOGGER.warning("Post-promotion check attempt %d failed: %s", attempt + 1, exc)
-            if attempt + 1 == POST_PROMOTION_ATTEMPTS:
-                reasons.append("serving health or prediction smoke check failed")
-            else:
-                time.sleep(5)
-    p95 = float(np.percentile(latencies, 95)) if latencies else None
-    if p95 is not None and p95 > POST_PROMOTION_P95_SECONDS:
-        reasons.append(
-            f"p95 latency {p95:.6f}s exceeds {POST_PROMOTION_P95_SECONDS:.6f}s"
+    """Verify readiness, concrete predictions and bounded p95 using the shared checker."""
+    try:
+        if promotion["status"] == "rolled_back":
+            raise RuntimeError("Interrupted operation already rolled back")
+        verify_serving_version(promotion["promoted_version"])
+        return {
+            "passed": True,
+            "reasons": [],
+            "observed_version": promotion["promoted_version"],
+            "p95_latency_seconds": None,
+        }
+    except RuntimeError as exc:
+        LOGGER.warning(
+            "Post-promotion serving validation failed: %s", type(exc).__name__
         )
-    return {
-        "passed": not reasons,
-        "reasons": reasons,
-        "observed_version": observed_version,
-        "p95_latency_seconds": p95,
-    }
+        return {
+            "passed": False,
+            "reasons": [str(exc)],
+            "observed_version": None,
+            "p95_latency_seconds": None,
+        }
 
 
 @task.branch
 def deployment_gate(result: DeploymentCheckResult) -> str:
     """Route failed deployment checks to automatic rollback."""
-    return "promotion_succeeded" if deployment_checks_pass(result) else "rollback_promotion"
+    return (
+        "promotion_succeeded"
+        if deployment_checks_pass(result)
+        else "rollback_promotion"
+    )
 
 
 @task(retries=1)
-def rollback_promotion(promotion: PromotionResult) -> str:
+def rollback_promotion(
+    promotion: PromotionResult, checks: DeploymentCheckResult
+) -> str:
     """Automatically restore the saved production alias target."""
     client = MlflowClient(tracking_uri=MLFLOW_TRACKING_URI)
-    restored = restore_previous_alias(client, promotion, PRODUCTION_ALIAS)
+    restored = restore_previous_alias(
+        client, promotion, PRODUCTION_ALIAS, "; ".join(checks["reasons"])
+    )
     LOGGER.error("Promotion rolled back to model version %s", restored)
     return restored
 
@@ -556,8 +540,10 @@ def rollback_promotion(promotion: PromotionResult) -> str:
 @task
 def promotion_succeeded(promotion: PromotionResult) -> None:
     """Record successful completion of approved production promotion."""
-    persist_if_configured(
-        MlflowClient(tracking_uri=MLFLOW_TRACKING_URI), MODEL_NAME, PRODUCTION_ALIAS
+    complete_promotion(
+        MlflowClient(tracking_uri=MLFLOW_TRACKING_URI),
+        dict(promotion),
+        serving_verified=True,
     )
     LOGGER.info(
         "Promotion completed: %s -> %s",
@@ -572,6 +558,8 @@ def promotion_succeeded(promotion: PromotionResult) -> None:
     schedule=[RETRAINING_EVENT_ASSET],
     start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
     catchup=False,
+    on_success_callback=pipeline_success,
+    on_failure_callback=pipeline_failure,
     max_active_runs=1,
     tags=["airbnb", "retraining", "approval", "mlflow"],
 )
@@ -602,11 +590,12 @@ def retraining_pipeline() -> None:
     )
     registered >> approval
     promotion = promote_to_production(
-        registered, approval.output  # type: ignore[arg-type]
+        registered,
+        approval.output,  # type: ignore[arg-type]
     )
     checks = run_post_promotion_checks(promotion)  # type: ignore[arg-type]
     post_gate = deployment_gate(checks)  # type: ignore[arg-type]
-    rolled_back = rollback_promotion(promotion)  # type: ignore[arg-type]
+    rolled_back = rollback_promotion(promotion, checks)  # type: ignore[arg-type]
     succeeded = promotion_succeeded(promotion)  # type: ignore[arg-type]
     post_gate >> [rolled_back, succeeded]
 

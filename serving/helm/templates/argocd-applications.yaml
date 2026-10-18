@@ -233,8 +233,28 @@ spec:
   destination:
     server: {{ .Values.destination.server }}
     namespace: {{ .Values.destination.namespace }}
+  # Rollouts owns traffic weights and the pod-hash selector during analysis/abort.
+  # Ignore only those fields, preserving reconciliation of every other Service field.
+  ignoreDifferences:
+    - group: ""
+      kind: Service
+      name: airbnb-inference
+      namespace: {{ .Values.destination.namespace }}
+      jsonPointers: ["/spec/selector/rollouts-pod-template-hash"]
+    - group: ""
+      kind: Service
+      name: airbnb-inference-canary
+      namespace: {{ .Values.destination.namespace }}
+      jsonPointers: ["/spec/selector/rollouts-pod-template-hash"]
+    - group: traefik.io
+      kind: TraefikService
+      name: airbnb-inference
+      namespace: {{ .Values.destination.namespace }}
+      jsonPointers:
+        - /spec/weighted/services/0/weight
+        - /spec/weighted/services/1/weight
   syncPolicy:
-    syncOptions: ["CreateNamespace=true"]
+    syncOptions: ["CreateNamespace=true", "RespectIgnoreDifferences=true"]
     {{- if .Values.syncPolicy.automated }}
     automated:
       prune: {{ .Values.syncPolicy.prune }}

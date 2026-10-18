@@ -6,13 +6,18 @@ metadata:
   labels:
     {{- include "airbnb.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 600
+  progressDeadlineAbort: true
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
-  {{- end }}
   strategy:
     canary:
+      scaleDownDelaySeconds: 30
+      abortScaleDownDelaySeconds: 30
+      dynamicStableScale: false
+      minPodsPerReplicaSet: 1
       stableService: {{ include "airbnb.fullname" . }}
       canaryService: {{ include "airbnb.fullname" . }}-canary
       trafficRouting:

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
@@ -41,12 +43,24 @@ class FakeRegistryClient:
     ) -> None:
         """Capture an alias mutation in call order."""
         self.alias_calls.append((model_name, alias, str(version)))
+        if alias == "champion":
+            self.champion_version = str(version)
 
     def set_model_version_tag(
         self, model_name: str, version: str, key: str, value: str
     ) -> None:
         """Capture promotion or rollback audit metadata."""
         self.tag_calls.append((model_name, str(version), key, value))
+
+
+@pytest.fixture(autouse=True)
+def promotion_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Isolate durable receipts and mock only already-tested artifact/network boundaries."""
+    monkeypatch.setenv("AIRBNB_PROMOTION_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr("training.deployment.verify_registry_version", Mock())
+    monkeypatch.setattr("training.deployment._event", Mock())
+    monkeypatch.setattr("training.deployment.persist_if_configured", Mock())
+    monkeypatch.setattr("retraining.retrain.verify_serving_version", Mock())
 
 
 def _metrics(mae: float, rmse: float, segment_mae: float) -> dict[str, float]:
@@ -127,21 +141,14 @@ def test_failed_deployment_check_routes_to_rollback() -> None:
 
 
 def test_successful_rollback_restores_previous_alias() -> None:
-    """Restore the saved version and mark the failed challenger rolled back."""
+    """Verify restored serving predictions before marking rollback complete."""
     client = FakeRegistryClient()
-    restored = restore_previous_alias(
-        client,
-        {
-            "model_name": "prices",
-            "previous_version": "4",
-            "promoted_version": "5",
-            "approved_by": "reviewer@example.com",
-            "approved_at": "2026-09-29T14:00:00+00:00",
-        },
-        "champion",
+    promotion = promote_registered_challenger(
+        client, "prices", "champion", "rollback", "5", _approval()
     )
+    restored = restore_previous_alias(client, promotion, "champion")
     assert restored == "4"
-    assert client.alias_calls == [("prices", "champion", "4")]
+    assert client.alias_calls[-1] == ("prices", "champion", "4")
     assert ("prices", "5", "promotion_status", "rolled_back") in client.tag_calls
 
 
@@ -154,3 +161,95 @@ def test_successful_deployment_check_does_not_rollback() -> None:
         "p95_latency_seconds": 0.04,
     }
     assert deployment_checks_pass(result) is True
+
+
+def test_concurrent_pending_promotion_is_rejected() -> None:
+    """An unfinished durable receipt blocks a different promotion across tasks."""
+    client = FakeRegistryClient()
+    promote_registered_challenger(
+        client, "prices", "champion", "rollback", "5", _approval()
+    )
+    with pytest.raises(RuntimeError, match="Unfinished"):
+        promote_registered_challenger(
+            client, "prices", "champion", "rollback", "6", _approval()
+        )
+    assert client.champion_version == "5"
+
+
+def test_interrupted_promotion_reuses_saved_previous_version() -> None:
+    """Retry preserves the original rollback candidate rather than the promoted alias."""
+    client = FakeRegistryClient()
+    original = promote_registered_challenger(
+        client, "prices", "champion", "rollback", "5", _approval()
+    )
+    retry = promote_registered_challenger(
+        client, "prices", "champion", "rollback", "5", _approval()
+    )
+    assert retry["previous_version"] == original["previous_version"] == "4"
+    assert len(client.alias_calls) == 2
+
+
+def test_stale_rollback_cannot_replace_external_promotion() -> None:
+    """Out-of-band registry writes are detected before rollback mutation."""
+    client = FakeRegistryClient()
+    promotion = promote_registered_challenger(
+        client, "prices", "champion", "rollback", "5", _approval()
+    )
+    client.champion_version = "9"
+    with pytest.raises(RuntimeError, match="stale rollback"):
+        restore_previous_alias(client, promotion, "champion")
+    assert client.champion_version == "9"
+
+
+def test_alias_restoration_is_not_rollback_completion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unhealthy serving leaves a failed receipt and can retry verification safely."""
+    client = FakeRegistryClient()
+    promotion = promote_registered_challenger(
+        client, "prices", "champion", "rollback", "5", _approval()
+    )
+    checker = Mock(side_effect=RuntimeError("restored model unavailable"))
+    monkeypatch.setattr("retraining.retrain.verify_serving_version", checker)
+    with pytest.raises(RuntimeError, match="unavailable"):
+        restore_previous_alias(client, promotion, "champion")
+    assert client.champion_version == "4"
+    assert not any(key == "rollback_verified_at" for _, _, key, _ in client.tag_calls)
+    checker.side_effect = None
+    assert restore_previous_alias(client, promotion, "champion") == "4"
+    assert restore_previous_alias(client, promotion, "champion") == "4"
+    assert checker.call_count == 2
+
+
+def test_stale_champion_since_evaluation_blocks_approval() -> None:
+    """An approval for an old holdout comparison cannot replace a newer champion."""
+    client = FakeRegistryClient("8")
+    with pytest.raises(RuntimeError, match="since evaluation"):
+        promote_registered_challenger(
+            client,
+            "prices",
+            "champion",
+            "rollback",
+            "5",
+            _approval(),
+            expected_previous="4",
+        )
+    assert not client.alias_calls
+
+
+def test_tags_fail_before_exposing_candidate_alias() -> None:
+    """A partial metadata failure preserves champion and original retry receipt."""
+    client = FakeRegistryClient()
+    client.set_model_version_tag = Mock(side_effect=RuntimeError("tag write failed"))
+    with pytest.raises(RuntimeError, match="tag write"):
+        promote_registered_challenger(
+            client, "prices", "champion", "rollback", "5", _approval()
+        )
+    assert client.champion_version == "4"
+    client.set_model_version_tag = Mock()
+    assert (
+        promote_registered_challenger(
+            client, "prices", "champion", "rollback", "5", _approval()
+        )["previous_version"]
+        == "4"
+    )
