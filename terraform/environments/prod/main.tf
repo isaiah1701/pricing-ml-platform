@@ -199,7 +199,28 @@ resource "aws_sns_topic_subscription" "alert_email" {
   endpoint  = var.alert_notification_email
 }
 
+data "aws_kms_key" "sns_notifications" {
+  key_id = "alias/aws/sns"
+}
+
 data "aws_iam_policy_document" "alertmanager_notifications" {
+  statement {
+    sid       = "EncryptPlatformAlertPublications"
+    effect    = "Allow"
+    actions   = ["kms:GenerateDataKey", "kms:Decrypt"]
+    resources = [data.aws_kms_key.sns_notifications.arn]
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["sns.${var.aws_region}.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "kms:EncryptionContext:aws:sns:topicArn"
+      values   = [aws_sns_topic.platform_alerts.arn]
+    }
+  }
+
   statement {
     sid       = "PublishPlatformAlerts"
     effect    = "Allow"

@@ -41,6 +41,11 @@ existingSecret: ''
 platform:
   enabled: false
   awsRegion: eu-west-2
+  grafanaAlerting:
+    notifications:
+      enabled: true
+      mode: alertmanager
+      email: imichael1403@gmail.com
   publicIngress:
     enabled: true
     grafanaHost: grafana.platf0rm.site

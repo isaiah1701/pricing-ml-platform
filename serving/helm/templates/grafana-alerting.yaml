@@ -17,10 +17,18 @@ data:
         name: mlops-email
         receivers:
           - uid: mlops-email
+            {{- if eq (.Values.platform.grafanaAlerting.notifications.mode | default "smtp") "alertmanager" }}
+            type: prometheus-alertmanager
+            settings:
+              url: {{ required "Grafana Alertmanager URL is required" .Values.platform.grafanaAlerting.notifications.alertmanagerUrl | quote }}
+            {{- else if eq (.Values.platform.grafanaAlerting.notifications.mode | default "smtp") "smtp" }}
             type: email
             settings:
               addresses: {{ required "platform.grafanaAlerting.notifications.email is required" .Values.platform.grafanaAlerting.notifications.email | quote }}
               singleEmail: true
+            {{- else }}
+            {{- fail "Grafana notification mode must be smtp or alertmanager" }}
+            {{- end }}
             disableResolveMessage: false
     policies:
       - orgId: 1

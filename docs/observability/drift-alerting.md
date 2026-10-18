@@ -56,6 +56,19 @@ unavailable until matched outcome data exists.
 
 ## Alert ownership and notification configuration
 
+Production email uses **Grafana → the existing Alertmanager → the existing
+SNS topic → imichael1403@gmail.com**. It requires no SMTP credentials or Grafana
+AWS role. The production notification mode is `alertmanager`; Terraform owns the
+email subscription and the existing publisher role's exact SNS/KMS permissions.
+AWS sends a subscription confirmation link that the recipient must accept before
+alerts can arrive. Required confirmation is not automatically bypassed.
+
+The Alertmanager route explicitly defines its Watchdog `null` receiver; inheriting
+a default child route while replacing its receiver list otherwise prevents the
+operator from starting Alertmanager. Grafana production alerts retain the seven-
+day repeat policy through both routing layers. SMTP below remains an optional
+alternative for deployments that already have an SMTP service.
+
 Grafana sidecar provisioning installs exactly eight managed rules:
 InferenceDown, HighInferenceErrorRate, HighInferenceLatency, ModelDriftDetected,
 DriftMonitoringStale, AirflowPipelineFailure, ModelRefreshFailure and
@@ -71,14 +84,15 @@ treat no data as OK and rely on availability/freshness alerts. Query errors ente
 Grafana's Error state. Canary queries use explicitly configured kube-state-metrics
 custom resource series rather than assumed controller metrics.
 
-Email routing is deliberately inactive until an operator supplies a reviewed
-recipient and working SMTP secret. In `values/production.yaml` configure:
+For the optional direct-SMTP route, supply a reviewed recipient and working
+SMTP secret. In `values/production.yaml` configure:
 
 ```yaml
 platform:
   grafanaAlerting:
     notifications:
       enabled: true
+      mode: smtp
       email: platform-operators@example.com
       smtpSecretArn: <existing SMTP SecretsManager secret ARN>
 ```

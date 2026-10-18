@@ -266,7 +266,14 @@ addons:
             group_wait: 30s
             group_interval: 5m
             repeat_interval: 4h
+            routes:
+            - receiver: "null"
+              matchers: ['alertname="Watchdog"']
+            - receiver: platform-sns
+              matchers: ['service="airbnb-price-predictor"', 'environment="production"']
+              repeat_interval: 7d
           receivers:
+          - name: "null"
           - name: platform-sns
             sns_configs:
             - topic_arn: arn:aws:sns:eu-west-2:655916164714:prod-mlops-prod-alerts

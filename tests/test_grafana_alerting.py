@@ -30,7 +30,7 @@ def test_rules_are_provisioned_once_and_have_bounded_identity() -> None:
 
 def test_email_notifications_require_explicit_reviewed_configuration() -> None:
     """No SMTP credentials enter Git; configured email references a real external secret."""
-    command = ['helm', 'template', 'airbnb', str(ROOT / 'serving/helm'), '-f', str(ROOT / 'serving/helm/values/production.yaml'), '--set', 'platform.enabled=true']
+    command = ['helm', 'template', 'airbnb', str(ROOT / 'serving/helm'), '-f', str(ROOT / 'serving/helm/values/production.yaml'), '--set', 'platform.enabled=true', '--set', 'platform.grafanaAlerting.notifications.enabled=false', '--set', 'platform.grafanaAlerting.notifications.mode=smtp']
     default = subprocess.run(command, check=True, capture_output=True, text=True).stdout
     default_objects = list(yaml.safe_load_all(default))
     config = next(obj for obj in default_objects if obj and obj['metadata']['name'] == 'mlops-grafana-alerting')
@@ -44,3 +44,24 @@ def test_email_notifications_require_explicit_reviewed_configuration() -> None:
     secret = next(obj for obj in objects if obj and obj['kind'] == 'ExternalSecret' and obj['metadata']['name'] == 'grafana-smtp')
     assert secret['spec']['dataFrom'][0]['extract']['key'] == 'existing-smtp-secret'
     assert 'GF_SMTP_PASSWORD' in secret['spec']['target']['template']['data']
+
+
+def test_production_email_uses_existing_alertmanager_without_smtp() -> None:
+    """Route Grafana through the existing SNS publisher without provisioning SMTP secrets."""
+    rendered = subprocess.run(
+        ["helm", "template", "airbnb", str(ROOT / "serving/helm"), "-f", str(ROOT / "serving/helm/values/production.yaml"), "--set", "platform.enabled=true"],
+        check=True, capture_output=True, text=True,
+    ).stdout
+    resources = [item for item in yaml.safe_load_all(rendered) if item]
+    config = next(item for item in resources if item["metadata"]["name"] == "mlops-grafana-alerting")
+    notifications = yaml.safe_load(config["data"]["mlops-notifications.yaml"])
+    receiver = notifications["contactPoints"][0]["receivers"][0]
+    assert receiver["type"] == "prometheus-alertmanager"
+    assert receiver["settings"]["url"] == "http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093"
+    assert not any(item["kind"] == "ExternalSecret" and item["metadata"]["name"] == "grafana-smtp" for item in resources)
+    bootstrap = yaml.safe_load((ROOT / "serving/helm/values/bootstrap.yaml").read_text())
+    routing = bootstrap["addons"]["monitoring"]["values"]["alertmanager"]["config"]
+    receivers = {item["name"] for item in routing["receivers"]}
+    assert all(route["receiver"] in receivers for route in routing["route"]["routes"])
+    assert "null" in receivers
+    assert routing["route"]["routes"][1]["repeat_interval"] == "7d"

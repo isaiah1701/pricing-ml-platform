@@ -164,6 +164,8 @@ platform:
       enabled: false
       email: ""
       smtpSecretArn: ""
+      mode: smtp
+      alertmanagerUrl: http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093
   publicIngress:
     enabled: false
     grafanaHost: ""
