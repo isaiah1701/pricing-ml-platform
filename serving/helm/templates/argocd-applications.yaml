@@ -17,6 +17,8 @@ spec:
     {{- end }}
     {{- end }}
   destinations:
+    - namespace: argocd
+      server: {{ .Values.destination.server }}
     - namespace: {{ .Values.argoRollouts.namespace }}
       server: {{ .Values.destination.server }}
     - namespace: {{ .Values.externalSecretsOperator.namespace }}

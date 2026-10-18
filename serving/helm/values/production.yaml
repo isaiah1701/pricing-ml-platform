@@ -50,6 +50,8 @@ platform:
       email: imichael1403@gmail.com
   publicIngress:
     enabled: true
+    argocdHost: argocd.platf0rm.site
+    airflowHost: airflow.platf0rm.site
     grafanaHost: grafana.platf0rm.site
     mlflowHost: mlflow.platf0rm.site
     mlflowAuthRemoteKey: prod-mlops-prod/mlflow-public-auth
@@ -68,6 +70,7 @@ platform:
     databasePort: '5432'
     databaseName: mlflow
   airflow:
+    apiBaseUrl: https://airflow.platf0rm.site
     generateRuntimeSecret: false
     parallelism: 1
     parsingProcesses: 1

@@ -42,7 +42,7 @@ data:
   AIRFLOW__DAG_PROCESSOR__DAG_FILE_PROCESSOR_TIMEOUT: {{ $airflow.dagFileProcessorTimeout | default 240 | quote }}
   AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL: {{ $airflow.minFileProcessInterval | default 300 | quote }}
   AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
-  AIRFLOW__API__BASE_URL: http://airflow.airflow.svc.cluster.local:8080
+  AIRFLOW__API__BASE_URL: {{ $airflow.apiBaseUrl | quote }}
   AIRFLOW__API__WORKERS: "1"
   AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://localhost:8080/execution/
   AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"

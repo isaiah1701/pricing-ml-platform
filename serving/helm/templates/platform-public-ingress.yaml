@@ -1,6 +1,6 @@
 {{- if and .Values.platform.enabled (not .Values.bootstrap.enabled) .Values.platform.publicIngress.enabled }}
 {{- $public := .Values.platform.publicIngress }}
-{{- range $endpoint := list (dict "name" "grafana-public" "namespace" "monitoring" "host" $public.grafanaHost) (dict "name" "mlflow-public" "namespace" .Values.platform.mlflow.namespace "host" $public.mlflowHost) }}
+{{- range $endpoint := list (dict "name" "grafana-public" "namespace" "monitoring" "host" $public.grafanaHost) (dict "name" "mlflow-public" "namespace" .Values.platform.mlflow.namespace "host" $public.mlflowHost) (dict "name" "argocd-public" "namespace" "argocd" "host" $public.argocdHost) (dict "name" "airflow-public" "namespace" .Values.platform.airflow.namespace "host" $public.airflowHost) }}
 ---
 apiVersion: cert-manager.io/v1
 kind: Issuer
@@ -94,4 +94,44 @@ spec:
           port: 80
   tls:
     secretName: grafana-public-tls
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: argocd-public
+  namespace: argocd
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`{{ $public.argocdHost }}`) && Header(`Content-Type`, `application/grpc`)
+      kind: Rule
+      priority: 20
+      services:
+        - name: argocd-server
+          port: 80
+          scheme: h2c
+    - match: Host(`{{ $public.argocdHost }}`)
+      kind: Rule
+      priority: 10
+      services:
+        - name: argocd-server
+          port: 80
+  tls:
+    secretName: argocd-public-tls
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: airflow-public
+  namespace: {{ .Values.platform.airflow.namespace }}
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`{{ $public.airflowHost }}`)
+      kind: Rule
+      services:
+        - name: airflow
+          port: 8080
+  tls:
+    secretName: airflow-public-tls
 {{- end }}

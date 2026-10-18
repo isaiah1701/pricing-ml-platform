@@ -168,6 +168,8 @@ platform:
       alertmanagerUrl: http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093
   publicIngress:
     enabled: false
+    argocdHost: ""
+    airflowHost: ""
     grafanaHost: ""
     mlflowHost: ""
     issuerName: letsencrypt
@@ -209,6 +211,7 @@ platform:
     databasePort: 5432
     databaseName: airflow
     parallelism: 2
+    apiBaseUrl: http://airflow.airflow.svc.cluster.local:8080
     adminUsername: admin
     adminEmail: admin@localhost
     dataBucket: ""

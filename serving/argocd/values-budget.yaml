@@ -1,5 +1,10 @@
-# Small single-node deployment; Argo CD is administered through port-forwarding.
+# Small single-node deployment; HTTPS terminates at the existing Traefik ingress.
+global:
+  domain: argocd.platf0rm.site
 configs:
+  cm:
+    url: https://argocd.platf0rm.site
+    users.anonymous.enabled: false
   params:
     server.insecure: true
 dex:

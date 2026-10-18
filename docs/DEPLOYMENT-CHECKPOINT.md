@@ -42,3 +42,16 @@
   the already approved digest-pinned training runtime. Monitoring prune is in progress.
 - S3 has existing prediction events; retraining DAG is paused and will remain paused.
   Model-quality DAG is paused; outcomes must be checked before claiming accuracy.
+
+## Task 3 — HTTPS domain configuration (prepared)
+
+- Reuse the existing Traefik NLB and external-dns ownership for argocd.platf0rm.site
+  and airflow.platf0rm.site. No Terraform change or new load balancer is required.
+- Platform chart provisions namespace-local ACME issuers/certificates and TLS routes.
+  Argo has a priority gRPC/h2c route plus HTTP route; Airflow keeps FAB authentication.
+- Helmfile-owned Argo values set the public URL and explicitly disable anonymous access;
+  existing admin secret is preserved. Airflow API base URL uses the public HTTPS origin.
+- AppProject includes argocd as an allowed destination for the certificate and route.
+- Production platform/bootstrap Helm rendering and lint pass. Live DNS, certificate,
+  authenticated API and CLI verification pending deployment.
+- Argo ingress reference: https://argo-cd.readthedocs.io/en/latest/operator-manual/ingress/
