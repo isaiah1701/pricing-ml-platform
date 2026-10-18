@@ -164,16 +164,13 @@ Cluster access is private by default. During initial setup, use the restricted
 operator CIDR from the production tfvars or run these commands from an in-VPC
 runner. Remove public API access after private administration is available.
 
-```sh
-aws eks update-kubeconfig --name prod-mlops-prod --region eu-west-2
-helm repo add argo https://argoproj.github.io/argo-helm
-helm upgrade --install argocd argo/argo-cd \
-  --version 10.10.3 \
-  --namespace argocd \
-  --create-namespace \
-  -f serving/argocd/values-budget.yaml
-kubectl apply -f serving/argocd/root-application.yaml
-```
+Use the protected manual **Bootstrap** workflow after reviewing the production
+Terraform coordinates and existing images. It installs the existing Argo CD
+release through `helmfile.yaml`, preserving the release's current budget values
+and downstream Argo ownership. It validates account/cluster/node prerequisites
+before Kubernetes changes and preserves healthy installations by default.
+See [bootstrap.md](bootstrap.md) for exact variables, gates, ownership and offline
+validation. Do not trigger this workflow for ordinary application changes.
 
 Manually sync the root Application, then the controller, monitoring, and platform
 Applications. On an empty registry, complete section 7 before syncing inference;

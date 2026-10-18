@@ -2,8 +2,8 @@
 
 ## Active brief: complete CI/CD and GitOps bootstrap
 
-- Resume point: Phase A complete in this milestone commit (resolve with
-  `git log --oneline --grep='finish independent ML and platform workflows'`).
+- Resume point: Phase A complete (`771e65f`); Phase B complete in this milestone
+  (`git log --oneline --grep='manual Helmfile Argo bootstrap'`).
 - Exactly seven entry workflows: ML Data, ML Training, ML Deploy, Docker,
   Kubernetes, Terraform Plan and Terraform Apply. Removed k6 and consolidated
   general Python checks into Docker so Bootstrap will be the eighth workflow.
@@ -19,8 +19,20 @@
 - Previously committed training checkpoint support: `d52c838`; verified native
   interrupted-fit resume plus completed-member reuse. S3 recovery remains
   independent of checkpoints/RDS snapshots (`8341b87`).
-- Next: Phase B — inspect existing ownership, add manual Bootstrap with Helmfile
-  and focused offline tests; then Phase C integration/remaining hardening.
+- Phase B: exactly eight workflows, with manual protected Bootstrap. Added the
+  first Helmfile, owning only the existing argocd release/chart/budget values.
+  Terraform retains EKS add-ons; Argo retains downstream controllers/apps.
+  Bootstrap checks AWS account/region/EKS identity, kubeconfig server, existing
+  Ready system capacity, foundation readiness, Helm ownership and root references.
+  Healthy existing Argo releases are preserved unless an upgrade is explicitly
+  requested. Root sync uses the reviewed Git SHA; pending apps are reported.
+- Phase B checks: 36 bootstrap/workflow/canary tests passed; the final missing-
+  namespace guard passed all 14 focused bootstrap tests. Real Helmfile 1.5.0
+  build and Argo chart 10.10.3 lint passed offline. Ruff, actionlint and shell
+  syntax/diff checks passed. No live Bootstrap or deployment was executed.
+- Next: Phase C — finish integration checks, explicit controller reconciliation,
+  deployed-image digest verification, model-refresh polling, backup verification
+  and recovery documentation. Run full regressions, then commit.
 - Prerequisites remain unverified: actual protected environment reviewers,
   role permissions/OIDC, private runner reachability, Airflow bearer token,
   existing Terraform backend/inputs, and one-time approved-model S3 export.

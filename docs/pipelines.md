@@ -8,9 +8,10 @@
 | Docker | `docker.yml` | Python regression checks; selectively build, scan and publish runtimes |
 | Terraform Plan | `terraform-plan.yml` | Backend-free validation; optionally produce a saved production plan |
 | Terraform Apply | `terraform-apply.yml` | Manually apply an approved saved plan |
+| Bootstrap | `bootstrap.yml` | Manually establish the existing Argo CD release and root Application |
 | Kubernetes | `kubernetes.yml` | Helm/schema validation and explicitly approved Argo sync |
 
-Bootstrap is added in the next milestone. These are independent entry points;
+These eight workflows are independent entry points;
 none automatically runs every downstream workflow. k6 remains local-only under
 `tests/k6/`; it has no GitHub Actions workflow. There is no extra CI workflow or
 internal runner workflow: shared Python helpers keep the entry points small.
@@ -124,3 +125,6 @@ actionlint -shellcheck=
 
 Cloud-dependent paths are exercised with mocks/local registries. No live AWS,
 GitOps sync, model promotion, production load test or Terraform apply was run.
+
+For manual control-plane establishment, ownership and prerequisite checks, see
+`docs/bootstrap.md`. Bootstrap never runs for ordinary application changes.

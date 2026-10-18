@@ -1,0 +1,22 @@
+# Helmfile owns only the GitOps control plane. Argo owns downstream releases.
+environments:
+  production: {}
+---
+repositories:
+  - name: argo
+    url: https://argoproj.github.io/argo-helm
+
+helmDefaults:
+  wait: true
+  timeout: 600
+  createNamespace: true
+
+releases:
+  - name: argocd
+    namespace: argocd
+    chart: argo/argo-cd
+    version: 10.10.3
+    labels:
+      component: gitops-control-plane
+    values:
+      - serving/argocd/values-budget.yaml
