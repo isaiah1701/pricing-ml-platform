@@ -83,8 +83,12 @@ platform:
       smtpSecretArn: <existing SMTP SecretsManager secret ARN>
 ```
 
-The existing platform ClusterSecretStore must already have permission to read
-that ARN; no broad IAM permission or new role is added. The JSON secret needs
+Set Terraform production input `grafana_smtp_secret_arn` to that same existing
+ARN. The default empty input changes no permissions; a reviewed saved plan can
+grant only DescribeSecret/GetSecretValue for this exact ARN to the existing
+External Secrets role. Apply requires separate explicit authorization. No new
+role or wildcard permission is introduced. The existing platform ClusterSecretStore
+must have that permission before notification configuration is enabled. The JSON secret needs
 `host` (for example SMTP endpoint plus `:587`), `username`, `password` and
 `from_address`. External Secrets supplies `GF_SMTP_*` environment variables to
 Grafana, requires STARTTLS, and retains the Kubernetes Secret. The Grafana chart

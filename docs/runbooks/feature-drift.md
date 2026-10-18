@@ -1,32 +1,23 @@
-# AirbnbFeatureDriftDetected
+# Drift detected
 
-## Impact
+**Symptoms:** ModelDriftDetected; latest completed report exceeds the configured dataset share threshold.
 
-At least one feature PSI exceeds 0.2. The production population differs from
-training and model accuracy may degrade, especially when several related
-features drift together.
+**Dashboard:** Model Quality & Drift. Owner: ML Platform on-call; involve Data Science for
+model-quality decisions and SRE for cluster/delivery faults.
 
-## Diagnosis
+**PromQL** (scope to production when querying a shared Prometheus):
 
-1. Open the newest timestamped Evidently HTML report.
-2. Identify the `feature` and `kind` labels with the highest PSI scores.
-3. Compare ingestion volume, null rates, schema, units, and category mappings.
-4. Determine whether the change is genuine market behavior or a pipeline defect.
-5. Check whether the monitoring DAG emitted a retraining event.
+```promql
+airbnb_drift_share >= airbnb_drift_threshold
+```
 
-## Mitigation
+**Diagnostics:**
 
-Correct upstream transformations for data defects and rerun monitoring. For
-genuine sustained drift, validate the production window, run retraining, and
-compare the candidate against the existing champion before promotion.
+```sh
+kubectl -n airflow get pods
+kubectl -n airflow exec deployment/airflow -c scheduler -- airflow dags list-runs -d airbnb_drift_monitoring
+```
 
-## Rollback
+**Recovery:** Review the exact completed report under s3://<platform-bucket>/monitoring/drift/<timestamp>/. Compare data quality, model changes and collection windows. Preserve the existing retraining request; a human must approve compute and model promotion. Do not switch aliases solely because drift occurred.
 
-Roll back the feature-producing deployment when it introduced the shift. If a
-new model version is sensitive to the shifted feature, move the MLflow champion
-alias to the last verified version and confirm serving refresh.
-
-## Ownership
-
-Data Science owns drift interpretation. Data Engineering owns feature defects;
-ML Platform owns report generation and retraining-event delivery.
+**Verification:** Confirm a new successful evaluation, fresh success timestamp and appropriate breach/resolution state. An unchanged report must not create a new notification identity.

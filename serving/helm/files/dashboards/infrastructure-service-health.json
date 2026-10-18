@@ -413,6 +413,36 @@
         "w": 12,
         "h": 8
       }
+    },
+    {
+      "title": "Current aborted Rollout flag",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(mlops_rollout_aborted{namespace=\"airbnb-inference\"})",
+          "legendFormat": "aborted"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "Actual status.abort from the Rollout. This is current state, not a lifetime event counter.",
+      "id": 13,
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      }
     }
   ]
 }

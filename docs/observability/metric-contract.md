@@ -38,7 +38,9 @@ or raw features are metric labels. Existing `airbnb_` names remain canonical.
   `mlops_rollout_info{namespace,rollout,phase,revision}`,
   `mlops_rollout_stable_info{namespace,rollout,revision}`, and
   `mlops_analysis_run_info{namespace,analysisrun,phase}` are Info gauges from
-  actual Rollout/AnalysisRun status fields. KSM exposes only the pod template hash
+  actual Rollout/AnalysisRun status fields. `mlops_rollout_aborted` exposes
+  the actual Rollout status.abort flag as a gauge, with absent optional flags
+  treated as false for an existing Rollout. KSM exposes only the pod template hash
   label needed to join stable/canary traffic. Do not query assumed controller
   metrics that aren't exposed.
 

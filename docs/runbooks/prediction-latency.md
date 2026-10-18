@@ -1,29 +1,23 @@
-# AirbnbPredictionLatencyP95High
+# High inference latency
 
-## Impact
+**Symptoms:** HighInferenceLatency; p95 over 250 ms with enough prediction samples.
 
-Prediction p95 exceeds 250 ms for ten minutes. Interactive callers experience
-slow pricing responses and may time out or retry.
+**Dashboard:** Model Inference / Kubernetes & Delivery. Owner: ML Platform on-call; involve Data Science for
+model-quality decisions and SRE for cluster/delivery faults.
 
-## Diagnosis
+**PromQL** (scope to production when querying a shared Prometheus):
 
-1. Compare p50, p95, and p99 against request rate, CPU, memory, and restarts.
-2. Split observations by active model version and deployment revision.
-3. Check for CPU throttling, garbage collection, noisy neighbors, and replica saturation.
-4. Run the documented serving load test on the active artifact.
-5. Inspect whether a recently promoted model increased inference cost.
+```promql
+histogram_quantile(0.95, sum by (le) (max without (job, service) (rate(airbnb_prediction_latency_seconds_bucket[5m]))))
+```
 
-## Mitigation
+**Diagnostics:**
 
-Scale replicas, correct resource limits, or remove unhealthy pods. Optimize only
-after profiling confirms the bottleneck.
+```sh
+kubectl -n airbnb-inference top pods
+kubectl -n airbnb-inference get rollout,pods
+```
 
-## Rollback
+**Recovery:** Compare CPU, memory, queue rejection and canary revision. Inspect dependency latency and recent model changes. Restore the approved previous model or revert the application revision after identifying the cause. Do not enable autoscaling or add nodes as an implicit fix.
 
-Restore the prior serving image or MLflow champion version if latency followed a
-release. Verify p95 remains below threshold for at least ten minutes.
-
-## Ownership
-
-SRE owns capacity and Kubernetes performance. ML Platform owns serving code;
-Data Science owns model-complexity regressions.
+**Verification:** Verify p95 recovers under representative existing traffic and queue rejections stop; do not run a production load test without approval.

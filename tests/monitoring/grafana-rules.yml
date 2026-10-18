@@ -33,7 +33,8 @@ groups:
       > 0) > 0
     for: 2m
   - alert: CanaryRolloutFailure
-    expr: (max(mlops_rollout_info{namespace="airbnb-inference",phase="Degraded"})
-      > 0 or max(mlops_analysis_run_info{namespace="airbnb-inference",phase=~"Failed|Error|Inconclusive"})
-      > 0) > 0
+    expr: ((max(mlops_rollout_aborted{namespace="airbnb-inference"}) > 0) or on()
+      (max(mlops_rollout_info{namespace="airbnb-inference",phase="Degraded"}) > 0
+      or max(mlops_analysis_run_info{namespace="airbnb-inference",phase=~"Failed|Error|Inconclusive"})
+      > 0)) > 0
     for: 1m

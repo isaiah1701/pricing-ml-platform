@@ -334,6 +334,16 @@ resource "aws_eks_pod_identity_association" "workloads" {
 }
 
 data "aws_iam_policy_document" "external_secrets" {
+  dynamic "statement" {
+    for_each = var.grafana_smtp_secret_arn == "" ? [] : [var.grafana_smtp_secret_arn]
+    content {
+      sid       = "ReadConfiguredGrafanaSmtpCredentials"
+      effect    = "Allow"
+      actions   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
+      resources = [statement.value]
+    }
+  }
+
   statement {
     sid     = "ReadPlatformDatabaseCredentials"
     effect  = "Allow"

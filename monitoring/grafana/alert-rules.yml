@@ -277,9 +277,10 @@ groups:
         to: 0
       datasourceUid: prometheus
       model:
-        expr: max(mlops_rollout_info{namespace="airbnb-inference",phase="Degraded"})
+        expr: (max(mlops_rollout_aborted{namespace="airbnb-inference"}) > 0) or on()
+          (max(mlops_rollout_info{namespace="airbnb-inference",phase="Degraded"})
           > 0 or max(mlops_analysis_run_info{namespace="airbnb-inference",phase=~"Failed|Error|Inconclusive"})
-          > 0
+          > 0)
         instant: true
         range: false
         refId: A

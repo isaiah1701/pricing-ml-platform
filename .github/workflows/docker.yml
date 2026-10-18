@@ -136,6 +136,8 @@ jobs:
           docker run --rm -v /tmp/mlops-monitoring:/checks -w /checks --entrypoint /bin/promtool prom/prometheus:v3.5.0 check rules dashboard-rules.yml
           docker run --rm -v /tmp/mlops-monitoring:/checks -w /checks --entrypoint /bin/promtool prom/prometheus:v3.5.0 test rules promql.yml
           docker run --rm -v "$PWD:/work" --entrypoint /bin/promtool prom/prometheus:v3.5.0 check rules /work/monitoring/prometheus/airbnb-alerts.yml
+          docker run --rm -v "$PWD:/work" --entrypoint /bin/promtool prom/prometheus:v3.5.0 check rules /work/tests/monitoring/grafana-rules.yml
+          docker run --rm -v "$PWD:/work" --entrypoint /bin/promtool prom/prometheus:v3.5.0 test rules /work/tests/monitoring/grafana-alerts-test.yml
 
   publish-production:
     needs: [validate, changes, build]

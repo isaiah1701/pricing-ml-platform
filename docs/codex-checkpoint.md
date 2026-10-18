@@ -1,6 +1,54 @@
 # CI/CD refactor checkpoint
 
-## Active brief: complete CI/CD and GitOps bootstrap — complete
+## Current brief: V1 observability, drift alerting and rollback — complete offline
+
+- Lead plus three requested specialists; existing unrelated `README.md`,
+  `load-tests/` and `skills/` preserved. No push or live operation.
+- `6131eef`: serving refresh/champion/registry instrumentation.
+- `c6541b5`: four GitOps dashboards, durable completed drift/quality/pipeline
+  state in existing S3/Pushgateway, replay, eight Grafana alerts and SMTP routing.
+- `d769d88`: serialized durable promotion receipts, provenance/checksums,
+  serving-verified rollback, pending telemetry outbox, fail-closed canaries and
+  scoped Rollouts/Argo CD routing ownership.
+- Final integration/runbook milestone is the commit titled
+  `feat: complete V1 observability integration and incident runbooks`.
+- Lead also wired every critical DAG, preserved an existing champion on ordinary
+  training registration, added real KSM collectors/abort flag and optional exact
+  SMTP secret permission on the existing External Secrets IAM role.
+- Final complete suite: **239 passed**, 14 dependency warnings. Last config
+  changes: **17 focused checks passed**, three dependency warnings. Ruff,
+  actionlint, Helm lint/template, Promtool (61 dashboard queries, nine retained
+  alerts, eight Grafana equivalents/synthetic cases), diff and production Terraform
+  fmt/validate passed. All eight workflows preserved; Docker CI now runs Grafana
+  synthetic checks too. No live Terraform plan/apply was executed.
+- Kubeconform: 18 supported resources valid, 33 custom resources skipped, no
+  invalid resources. Rendered the actual pinned monitoring chart with KSM/Grafana
+  settings. Controller behavior and Grafana runtime are separate live gates.
+- Read `docs/observability/README.md` for final report, agent changes, limits,
+  prerequisites and live acceptance; `docs/runbooks/README.md` indexes all eleven
+  incident procedures. Drift reports remain S3; Grafana only queries Prometheus.
+- Production prerequisites: shared Airflow PVC paths for metric publication and
+  promotion receipts; approved immutable runtime images; SMTP secret + recipient
+  and reviewed exact-ARN permission; Grafana restart after secret changes; actual
+  scrapes, drift breach/resolution, email and serving/canary rollback checks.
+- Current production champion STILL needs its one-time S3 export and read-only
+  verification before teardown. PVC checkpoints/leases are not durable DR storage.
+- Implemented/offline-validated V1 is complete. Deployed/portfolio live sign-off
+  remains pending. No AWS mutations, EKS deployment, model promotion, production
+  training/load, SMTP send or live failure injection occurred.
+
+### Exact continuation for this brief
+
+No implementation work remains. Begin a separately authorized live verification
+session by reading the observability report and runbooks. Review image/GitOps
+releases and protected-environment/runner/OIDC access; configure the SMTP secret,
+recipient and existing-role exact-ARN permission through a reviewed plan; reconcile
+only after explicit live authorization; replay retained metric snapshots; run an
+approved drift evaluation and verify scrapes/dashboard values/alert resolution;
+authorize email and rollback acceptance checks. Export and verify champion before
+any teardown. Do not push, apply, deploy or inject failures without authorization.
+
+## Prior completed brief: CI/CD and GitOps bootstrap
 
 - Phase A: `771e65f` — independent workflow split, approved model selection,
   reviewed Terraform binary-plan handoff, and removal of the k6 workflow.

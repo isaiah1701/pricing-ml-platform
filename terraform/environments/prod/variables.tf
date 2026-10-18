@@ -296,6 +296,17 @@ variable "redis_node_type" {
   default     = "cache.t4g.small"
 }
 
+variable "grafana_smtp_secret_arn" {
+  description = "Optional existing eu-west-2 SMTP secret read by the existing External Secrets role; never an SMTP credential."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.grafana_smtp_secret_arn == "" || can(regex("^arn:aws:secretsmanager:eu-west-2:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+$", var.grafana_smtp_secret_arn))
+    error_message = "Use an existing eu-west-2 Secrets Manager secret ARN or leave SMTP disabled."
+  }
+}
+
 variable "mlflow_artifact_prefix" {
   description = "S3 key prefix that inference may read when artifact storage uses S3."
   type        = string

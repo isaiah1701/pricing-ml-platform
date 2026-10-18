@@ -1,29 +1,22 @@
-# AirbnbServingErrorRateHigh
+# High inference error rate
 
-## Impact
+**Symptoms:** HighInferenceErrorRate; prediction 5xx above 5% with enough traffic.
 
-More than 5% of prediction requests return HTTP 5xx for ten minutes. Clients
-receive no price estimate and may retry, increasing load.
+**Dashboard:** Model Inference. Owner: ML Platform on-call; involve Data Science for
+model-quality decisions and SRE for cluster/delivery faults.
 
-## Diagnosis
+**PromQL** (scope to production when querying a shared Prometheus):
 
-1. Check `/health`, `/ready`, request status metrics, and application logs.
-2. Split errors by pod and active model version.
-3. Inspect prediction-failure counts and recent model alias changes.
-4. Check CPU, memory, restarts, MLflow availability, and malformed model output.
-5. Reproduce one sanitized request against the affected version.
+```promql
+sum(rate(airbnb_http_requests_total{endpoint="/predict",status=~"5.."}[5m])) / clamp_min(sum(rate(airbnb_http_requests_total{endpoint="/predict"}[5m])), 0.001)
+```
 
-## Mitigation
+**Diagnostics:**
 
-Stop traffic to unready pods, scale healthy replicas if saturated, and correct
-dependency or artifact access failures. Avoid logging request feature payloads.
+```sh
+kubectl -n airbnb-inference get rollout,pods
+```
 
-## Rollback
+**Recovery:** Inspect the actual inference pod logs using kubectl logs <pod> -c inference --tail=100; avoid copying payloads or secrets. Check Redis, MLflow, validation and queue saturation. Roll back the model through the guarded promotion receipt, or revert the failing application commit in Git.
 
-Move the champion alias to the last verified version or roll back the serving
-deployment. Confirm readiness and error ratio recover before restoring traffic.
-
-## Ownership
-
-ML Platform on-call leads. SRE owns cluster/network faults; Data Science owns
-model-output failures.
+**Verification:** Require valid predictions at the intended version and a sustained error rate below the threshold.

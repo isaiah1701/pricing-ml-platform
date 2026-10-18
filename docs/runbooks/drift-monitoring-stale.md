@@ -1,33 +1,23 @@
-# AirbnbDriftMonitoringStale
+# Drift monitoring stale
 
-## Impact
+**Symptoms:** DriftMonitoringStale; no successful evaluation in 26 hours, or no timestamp.
 
-Production drift is unknown because no successful report has updated
-`airbnb_drift_last_success_timestamp_seconds` for 26 hours. Predictions may
-continue, but model-quality regressions can go undetected.
+**Dashboard:** Model Quality & Drift / Pipeline Health. Owner: ML Platform on-call; involve Data Science for
+model-quality decisions and SRE for cluster/delivery faults.
 
-## Diagnosis
+**PromQL** (scope to production when querying a shared Prometheus):
 
-1. Check the latest `airbnb_drift_monitoring` Airflow run and task logs.
-2. Verify new objects exist under `production/events/date=.../hour=.../` and
-   inspect `airbnb_prediction_events_total{outcome="failed"}`.
-3. Confirm the reference and compacted production paths contain the configured columns.
-4. Check Evidently dependency/import errors and S3/report write permissions.
-5. Confirm Pushgateway is exposing the generated drift metrics.
+```promql
+time() - airbnb_drift_last_success_timestamp_seconds
+```
 
-## Mitigation
+**Diagnostics:**
 
-Restore dataset access or worker capacity, rerun the failed DAG, and verify the
-last-success timestamp advances. Treat reports from incomplete production
-windows as invalid.
+```sh
+kubectl -n airflow exec deployment/airflow -c scheduler -- airflow dags list-runs -d airbnb_drift_monitoring
+kubectl -n monitoring get pods,svc | rg pushgateway
+```
 
-## Rollback
+**Recovery:** Check DAG pause/scheduler state, production-event availability, S3 permissions, reference features and metric publication errors. Reuse the bounded production window. Recover retained metric snapshots using the drift-alerting guide; replay does not make an old evaluation fresh. Resume one approved evaluation instead of inventing zero drift.
 
-If a monitoring-code release caused the failure, redeploy the previous Airflow
-image/DAG revision. Do not roll back or promote the serving model solely because
-monitoring is stale.
-
-## Ownership
-
-ML Platform on-call owns response. Data Engineering owns production-window
-delivery; SRE owns Airflow and Prometheus availability.
+**Verification:** Require completed S3 reports plus a fresh success timestamp, scrape success, and no stale alert. Keep no-data distinct from healthy.

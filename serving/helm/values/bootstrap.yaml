@@ -352,6 +352,13 @@ addons:
                     info:
                       path:
                       - metadata
+                - name: rollout_aborted
+                  help: Whether the current Rollout is explicitly aborted.
+                  each:
+                    type: Gauge
+                    gauge:
+                      path: [status, abort]
+                      nilIsZero: true
                 - name: rollout_stable_info
                   help: Retained stable rollout pod revision.
                   labelsFromPath:
