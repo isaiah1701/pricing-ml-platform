@@ -181,6 +181,8 @@ platform:
         cpu: "1"
         memory: 2Gi
   airflow:
+    # Disable when restoring the existing airflow-runtime Secret with an RDS snapshot.
+    generateRuntimeSecret: true
     nodeSelector:
       workload: training
     componentResources:

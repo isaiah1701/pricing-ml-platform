@@ -25,7 +25,7 @@ CHART = PROJECT_ROOT / "serving/helm"
 
 @pytest.fixture(scope="module")
 def platform() -> list[dict[str, Any]]:
-    """Render the platform with realistic non-secret AWS coordinates."""
+    """Render a fresh platform with realistic non-secret AWS coordinates."""
     helm = shutil.which("helm")
     if helm is None:
         pytest.skip("helm is not installed")
@@ -44,6 +44,8 @@ def platform() -> list[dict[str, Any]]:
             "workload.enabled=false",
             "--set",
             "platform.enabled=true",
+            "--set",
+            "platform.airflow.generateRuntimeSecret=true",
             "--set",
             "platform.mlflow.databaseHost=mlflow.internal",
             "--set",
@@ -184,6 +186,38 @@ def test_airflow_runs_supervised_components_after_migrations(
         "AIRFLOW__API__SECRET_KEY",
         "AIRFLOW_ADMIN_PASSWORD",
     } <= keys.keys()
+
+
+def test_airflow_restore_preserves_existing_runtime_secret() -> None:
+    """Keep restored encryption keys out of the password generator's ownership."""
+    helm = shutil.which("helm")
+    if helm is None:
+        pytest.skip("helm is not installed")
+    LOGGER.info("Checking Airflow restore preserves the existing runtime Secret")
+    result = subprocess.run(
+        [
+            helm, "template", "airbnb-platform", str(CHART),
+            "-f", str(CHART / "values/production.yaml"),
+            "--set", "platform.enabled=true",
+            "--set", "workload.enabled=false",
+            "--set", "platform.airflow.generateRuntimeSecret=false",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    resources = [resource for resource in yaml.safe_load_all(result.stdout) if resource]
+    assert not any(
+        resource["kind"] in {"Password", "ExternalSecret"}
+        and resource["metadata"]["name"] == "airflow-runtime"
+        for resource in resources
+    )
+    airflow = next(
+        resource for resource in resources
+        if resource["kind"] == "Deployment" and resource["metadata"]["name"] == "airflow"
+    )
+    for container in airflow["spec"]["template"]["spec"]["containers"]:
+        assert {"secretRef": {"name": "airflow-runtime"}} in container["envFrom"]
 
 
 def test_public_observability_ingress_is_tls_and_mlflow_is_authenticated(

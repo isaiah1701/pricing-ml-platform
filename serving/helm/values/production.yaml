@@ -1,10 +1,10 @@
 image:
   repository: 655916164714.dkr.ecr.eu-west-2.amazonaws.com/prod-mlops-prod-serving
-  tag: sha-a388ced6ef96247afe870d34279908031dfaefa9
+  tag: sha-838f3bcec5d73f7540ede21e36b26dc89a8e171c
   pullPolicy: IfNotPresent
 trainingImage:
   repository: 655916164714.dkr.ecr.eu-west-2.amazonaws.com/prod-mlops-prod-training
-  tag: sha-c31d5322b8204967dfa88ab24e98ca87b7b96a2c
+  tag: sha-838f3bcec5d73f7540ede21e36b26dc89a8e171c
 ingress:
   enabled: true
   className: traefik
@@ -55,12 +55,13 @@ platform:
       limits:
         cpu: '1'
         memory: 2Gi
-    databaseSecretArn: arn:aws:secretsmanager:eu-west-2:655916164714:secret:rds!db-e202afc9-aaa7-44cd-b85c-110ae6c7dbe4-7AucSN
+    databaseSecretArn: arn:aws:secretsmanager:eu-west-2:655916164714:secret:rds!db-d7a15147-b047-4c68-ad73-5fbe27913d23-7eMyBp
     databaseHost: prod-mlops-prod-mlflow.crcuu0a2a9tg.eu-west-2.rds.amazonaws.com
     artifactRoot: s3://prod-mlops-prod-655916164714-data/mlflow
     databasePort: '5432'
     databaseName: mlflow
   airflow:
+    generateRuntimeSecret: false
     parallelism: 1
     parsingProcesses: 1
     dagImportTimeout: 180
@@ -83,7 +84,7 @@ platform:
       limits:
         cpu: '1'
         memory: 4Gi
-    databaseSecretArn: arn:aws:secretsmanager:eu-west-2:655916164714:secret:rds!db-7d8b27dd-dccd-416f-8fad-a59333a49618-iXFtOC
+    databaseSecretArn: arn:aws:secretsmanager:eu-west-2:655916164714:secret:rds!db-e63e7001-3489-45d9-b421-ea8da2d02dd3-DUw03f
     databaseHost: prod-mlops-prod-airflow.crcuu0a2a9tg.eu-west-2.rds.amazonaws.com
     dataBucket: prod-mlops-prod-655916164714-data
     redisConnectionString: master.prod-mlops-prod-features.gffday.euw2.cache.amazonaws.com:6379,ssl=true
