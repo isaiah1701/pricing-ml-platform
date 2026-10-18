@@ -25,3 +25,20 @@
 - Deployment/live resolution: pending push, CI and Argo synchronization.
 - Other observed alerts: missing production/outcome/quality source data and Alertmanager
   delivery failures. These are not suppressed by this change.
+
+## Task 2 — Dashboard repair and runtime synchronization (in progress)
+
+- Authenticated Grafana API confirms all four UIDs provisioned: airbnb-service-health,
+  airbnb-pricing-business, airbnb-model-drift, airbnb-pipeline-health.
+- Executed every dashboard query against live Prometheus. Inference/container readiness,
+  resources and successful prediction count (2445) return data. No current prediction
+  traffic means rate 0 and latency NaN, not a collector failure.
+- Rollout metadata, serving registry refresh and pipeline series are absent in the old
+  running runtime. Existing source already includes their collectors.
+- Added worker node CPU/memory panels; missing values explicitly await source data.
+  Kept the existing dashboard UIDs/titles. Both source and packaged JSON copies agree.
+- Targeted dashboard/alert tests: 7 passed. Kubernetes and Docker CI passed for 0f720d4.
+- Synced bootstrap and platform at 0f720d4 via scripts.sync_gitops; platform is starting
+  the already approved digest-pinned training runtime. Monitoring prune is in progress.
+- S3 has existing prediction events; retraining DAG is paused and will remain paused.
+  Model-quality DAG is paused; outcomes must be checked before claiming accuracy.

@@ -2,7 +2,7 @@
   "title": "Model Quality & Drift",
   "uid": "airbnb-model-drift",
   "schemaVersion": 39,
-  "version": 4,
+  "version": 5,
   "editable": true,
   "graphTooltip": 1,
   "tags": [
@@ -39,11 +39,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "dateTimeAsIso",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 1,
       "gridPos": {
         "x": 0,
@@ -71,7 +71,7 @@
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "noValue": "Unavailable",
+          "noValue": "Awaiting source data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -88,7 +88,7 @@
         },
         "overrides": []
       },
-      "description": "No data means no completed evaluation is available. Values above 26 hours are stale; they do not indicate a healthy current evaluation.",
+      "description": "No data means no completed evaluation is available. Values above 26 hours are stale; they do not indicate a healthy current evaluation. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 2,
       "gridPos": {
         "x": 12,
@@ -126,7 +126,7 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable",
+          "noValue": "Awaiting source data",
           "mappings": [
             {
               "type": "value",
@@ -145,7 +145,7 @@
         },
         "overrides": []
       },
-      "description": "0 healthy completed evaluation; 1 breach. Unavailable is distinct from healthy. Check freshness before interpreting this state.",
+      "description": "0 healthy completed evaluation; 1 breach. Unavailable is distinct from healthy. Check freshness before interpreting this state. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 3,
       "gridPos": {
         "x": 0,
@@ -173,11 +173,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 4,
       "gridPos": {
         "x": 12,
@@ -212,11 +212,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Aggregate is fraction of evaluated features breaching PSI; it is not mean feature PSI.",
+      "description": "Aggregate is fraction of evaluated features breaching PSI; it is not mean feature PSI. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 5,
       "gridPos": {
         "x": 0,
@@ -251,11 +251,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 6,
       "gridPos": {
         "x": 12,
@@ -283,11 +283,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Historical scraped completed drift state. Detailed reports remain in S3.",
+      "description": "Historical scraped completed drift state. Detailed reports remain in S3. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 7,
       "gridPos": {
         "x": 0,
@@ -315,11 +315,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "currencyUSD",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Champion/challenger evaluation holdout. This is not production accuracy.",
+      "description": "Champion/challenger evaluation holdout. This is not production accuracy. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 8,
       "gridPos": {
         "x": 12,
@@ -347,11 +347,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "currencyUSD",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 9,
       "gridPos": {
         "x": 0,
@@ -379,11 +379,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 10,
       "gridPos": {
         "x": 12,
@@ -411,11 +411,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "currencyUSD",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Only matched delayed production outcomes; no data means accuracy unavailable. Offline holdout metrics never fill this panel.",
+      "description": "Only matched delayed production outcomes; no data means accuracy unavailable. Offline holdout metrics never fill this panel. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 11,
       "gridPos": {
         "x": 0,
@@ -443,11 +443,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 12,
       "gridPos": {
         "x": 12,
@@ -475,11 +475,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Latest terminal training and drift-triggered retraining DAG outcomes. 1 success; 0 failure. Completed training never implies deployment or approval.",
+      "description": "Latest terminal training and drift-triggered retraining DAG outcomes. 1 success; 0 failure. Completed training never implies deployment or approval. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 13,
       "gridPos": {
         "x": 0,
@@ -519,11 +519,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 14,
       "gridPos": {
         "x": 12,
@@ -558,11 +558,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "dateTimeAsIso",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 15,
       "gridPos": {
         "x": 0,

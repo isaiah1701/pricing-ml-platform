@@ -114,7 +114,7 @@ def test_dashboard_views_keep_offline_quality_and_unknown_states_explicit() -> N
     delayed = next(panel for panel in quality['panels'] if panel['title'].startswith('Delayed outcome MAE'))
     assert 'airbnb_model_quality_mae_dollars' in delayed['targets'][0]['expr']
     assert 'offline_evaluation' not in delayed['targets'][0]['expr']
-    assert delayed['fieldConfig']['defaults']['noValue'] == 'Unavailable'
+    assert delayed['fieldConfig']['defaults']['noValue'] == 'Awaiting source data'
     for panel in quality['panels']:
         if panel['title'].startswith('Offline holdout'):
             assert 'airbnb_offline_evaluation_' in panel['targets'][0]['expr']

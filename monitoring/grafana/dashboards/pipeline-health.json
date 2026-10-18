@@ -2,7 +2,7 @@
   "title": "Pipeline Health",
   "uid": "airbnb-pipeline-health",
   "schemaVersion": 39,
-  "version": 4,
+  "version": 5,
   "editable": true,
   "graphTooltip": 1,
   "tags": [
@@ -39,11 +39,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "1 success; 0 failure; unavailable before a completed observed run.",
+      "description": "1 success; 0 failure; unavailable before a completed observed run. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 1,
       "gridPos": {
         "x": 0,
@@ -71,11 +71,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 2,
       "gridPos": {
         "x": 12,
@@ -103,11 +103,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "dateTimeAsIso",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 3,
       "gridPos": {
         "x": 0,
@@ -135,11 +135,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 4,
       "gridPos": {
         "x": 12,
@@ -167,11 +167,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Feature build DAG includes offline write and online materialisation; outcome covers the full DAG.",
+      "description": "Feature build DAG includes offline write and online materialisation; outcome covers the full DAG. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 5,
       "gridPos": {
         "x": 0,
@@ -199,11 +199,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Latest terminal training and drift-triggered retraining DAG outcomes. 1 success; 0 failure. Completed training never implies deployment or approval.",
+      "description": "Latest terminal training and drift-triggered retraining DAG outcomes. 1 success; 0 failure. Completed training never implies deployment or approval. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 6,
       "gridPos": {
         "x": 12,
@@ -231,11 +231,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "S3 production feature window modification time as observed by completed drift evaluation; unavailable without a monitored window.",
+      "description": "S3 production feature window modification time as observed by completed drift evaluation; unavailable without a monitored window. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 7,
       "gridPos": {
         "x": 0,
@@ -263,11 +263,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Kubernetes workload availability; not an end-to-end registry API test.",
+      "description": "Kubernetes workload availability; not an end-to-end registry API test. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 8,
       "gridPos": {
         "x": 12,
@@ -295,11 +295,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Serving refresh verifies registry alias resolution. Check refresh failures and loaded/champion versions for registry or artifact errors.",
+      "description": "Serving refresh verifies registry alias resolution. Check refresh failures and loaded/champion versions for registry or artifact errors. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 9,
       "gridPos": {
         "x": 0,
@@ -327,11 +327,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 10,
       "gridPos": {
         "x": 12,
@@ -357,11 +357,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Latest successful alias lookup is 1; lookup failure is 0. Artifact load failures have separate serving refresh counters. Unknown before any lookup is unavailable.",
+      "description": "Latest successful alias lookup is 1; lookup failure is 0. Artifact load failures have separate serving refresh counters. Unknown before any lookup is unavailable. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 11,
       "gridPos": {
         "x": 0,

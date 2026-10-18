@@ -2,7 +2,7 @@
   "title": "Model Inference",
   "uid": "airbnb-pricing-business",
   "schemaVersion": 39,
-  "version": 4,
+  "version": 5,
   "editable": true,
   "graphTooltip": 1,
   "tags": [
@@ -39,11 +39,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Stable and canary scrapes are deduplicated per pod before summing.",
+      "description": "Stable and canary scrapes are deduplicated per pod before summing. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 1,
       "gridPos": {
         "x": 0,
@@ -71,11 +71,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Counter total for current processes; resets when pods restart. Use rates for traffic history.",
+      "description": "Counter total for current processes; resets when pods restart. Use rates for traffic history. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 2,
       "gridPos": {
         "x": 12,
@@ -110,11 +110,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 3,
       "gridPos": {
         "x": 0,
@@ -156,11 +156,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Queue wait and inference; excludes prediction event persistence and final HTTP serialization.",
+      "description": "Queue wait and inference; excludes prediction event persistence and final HTTP serialization. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 4,
       "gridPos": {
         "x": 12,
@@ -188,11 +188,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 5,
       "gridPos": {
         "x": 0,
@@ -220,11 +220,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Latest resolved alias target; a target may fail to load while the previous loaded version remains ready.",
+      "description": "Latest resolved alias target; a target may fail to load while the previous loaded version remains ready. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 6,
       "gridPos": {
         "x": 12,
@@ -252,11 +252,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 7,
       "gridPos": {
         "x": 0,
@@ -284,11 +284,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 8,
       "gridPos": {
         "x": 12,
@@ -316,11 +316,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 9,
       "gridPos": {
         "x": 0,
@@ -348,11 +348,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 10,
       "gridPos": {
         "x": 12,
@@ -380,11 +380,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "cores",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 11,
       "gridPos": {
         "x": 0,
@@ -412,11 +412,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 12,
       "gridPos": {
         "x": 12,

@@ -2,7 +2,7 @@
   "title": "Kubernetes & Delivery",
   "uid": "airbnb-service-health",
   "schemaVersion": 39,
-  "version": 4,
+  "version": 5,
   "editable": true,
   "graphTooltip": 1,
   "tags": [
@@ -39,11 +39,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 1,
       "gridPos": {
         "x": 0,
@@ -71,11 +71,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 2,
       "gridPos": {
         "x": 12,
@@ -103,11 +103,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "cores",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 3,
       "gridPos": {
         "x": 0,
@@ -135,11 +135,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 4,
       "gridPos": {
         "x": 12,
@@ -167,11 +167,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 5,
       "gridPos": {
         "x": 0,
@@ -202,11 +202,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Deduplicated process request rates joined to pod template hash. Stable uses Rollout status.stableRS; other active pod hashes are canary. Missing KSM identity remains unavailable rather than guessed from scrape Service labels.",
+      "description": "Deduplicated process request rates joined to pod template hash. Stable uses Rollout status.stableRS; other active pod hashes are canary. Missing KSM identity remains unavailable rather than guessed from scrape Service labels. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 6,
       "gridPos": {
         "x": 12,
@@ -234,11 +234,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Kube-state-metrics live Rollout phase and currentPodHash; does not imply cumulative abort history.",
+      "description": "Kube-state-metrics live Rollout phase and currentPodHash; does not imply cumulative abort history. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 7,
       "gridPos": {
         "x": 0,
@@ -266,11 +266,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 8,
       "gridPos": {
         "x": 12,
@@ -305,11 +305,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Current degraded or retained failed state; an aborted Rollout reports Degraded. Historical abort count is not inferred from gauges.",
+      "description": "Current degraded or retained failed state; an aborted Rollout reports Degraded. Historical abort count is not inferred from gauges. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 9,
       "gridPos": {
         "x": 0,
@@ -337,11 +337,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 10,
       "gridPos": {
         "x": 12,
@@ -369,11 +369,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 11,
       "gridPos": {
         "x": 0,
@@ -401,11 +401,11 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "",
+      "description": "Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 12,
       "gridPos": {
         "x": 12,
@@ -431,15 +431,79 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "Unavailable"
+          "noValue": "Awaiting source data"
         },
         "overrides": []
       },
-      "description": "Actual status.abort from the Rollout. This is current state, not a lifetime event counter.",
+      "description": "Actual status.abort from the Rollout. This is current state, not a lifetime event counter. Missing series mean awaiting source data, not zero. Event counters require observed events; latency requires predictions in the selected rate window.",
       "id": 13,
       "gridPos": {
         "x": 0,
         "y": 48,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Worker node CPU utilisation",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
+          "legendFormat": "{{instance}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "Awaiting source data"
+        },
+        "overrides": []
+      },
+      "description": "Live node-exporter worker utilisation. Missing data indicates an exporter or scrape problem.",
+      "id": 14,
+      "gridPos": {
+        "x": 12,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Worker node memory utilisation",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+          "legendFormat": "{{instance}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "Awaiting source data"
+        },
+        "overrides": []
+      },
+      "description": "Live node-exporter worker utilisation. Missing data indicates an exporter or scrape problem.",
+      "id": 15,
+      "gridPos": {
+        "x": 0,
+        "y": 56,
         "w": 12,
         "h": 8
       }
