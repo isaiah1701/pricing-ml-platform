@@ -37,7 +37,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: mlflow
-          image: {{ printf "%s:%s" (required "trainingImage.repository is required" .Values.trainingImage.repository) (required "trainingImage.tag is required" .Values.trainingImage.tag) | quote }}
+          image: {{ include "airbnb.image" .Values.trainingImage | quote }}
           imagePullPolicy: IfNotPresent
           command: ["mlflow"]
           args:

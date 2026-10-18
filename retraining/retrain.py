@@ -21,6 +21,7 @@ from mlflow import MlflowClient
 from sklearn.model_selection import train_test_split
 
 from training.lineage import publish_dataset_snapshot, verify_dataset_snapshot
+from training.recovery import persist_if_configured
 from training.registry import tag_version_before_alias
 from training.train import (
     ENTITY_COLUMNS,
@@ -555,6 +556,9 @@ def rollback_promotion(promotion: PromotionResult) -> str:
 @task
 def promotion_succeeded(promotion: PromotionResult) -> None:
     """Record successful completion of approved production promotion."""
+    persist_if_configured(
+        MlflowClient(tracking_uri=MLFLOW_TRACKING_URI), MODEL_NAME, PRODUCTION_ALIAS
+    )
     LOGGER.info(
         "Promotion completed: %s -> %s",
         promotion["previous_version"],

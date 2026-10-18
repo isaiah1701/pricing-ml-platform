@@ -18,6 +18,7 @@ from mlflow import MlflowClient
 from sklearn.model_selection import train_test_split
 
 from training.lineage import publish_dataset_snapshot, verify_dataset_snapshot
+from training.recovery import persist_if_configured
 from training.registry import tag_version_before_alias
 from training.train import (
     ENTITY_COLUMNS,
@@ -438,6 +439,7 @@ def conditional_registration(candidate: LoggedCandidate) -> dict[str, str]:
         MODEL_ALIAS,
         provenance_tags,
     )
+    persist_if_configured(client, REGISTERED_MODEL_NAME, MODEL_ALIAS)
     update_training_attempt(
         MLFLOW_TRACKING_URI,
         candidate["training_attempt_id"],

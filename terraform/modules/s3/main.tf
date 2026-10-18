@@ -2,6 +2,10 @@ resource "aws_s3_bucket" "this" {
   bucket              = var.bucket_name
   object_lock_enabled = var.object_lock_enabled
   tags                = var.tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_s3_bucket_object_lock_configuration" "this" {

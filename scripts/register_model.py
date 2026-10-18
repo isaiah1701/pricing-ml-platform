@@ -185,6 +185,9 @@ def register_champion() -> ModelVersion:
         alias=model_alias,
         version=version.version,
     )
+    from training.recovery import persist_if_configured
+
+    persist_if_configured(client, model_name, model_alias)
     return client.get_model_version(model_name, version.version)
 
 

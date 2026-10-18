@@ -23,8 +23,8 @@
 
 ## Delivery state
 
-- Completed: Phase 0 (`acd0222`); Phase 1 (this milestone commit; resolve with
-  `git log --oneline --grep='independent gated'`).
+- Completed: Phase 0 (`acd0222`); Phase 1 (`e876ff1`); Phase 2 (this milestone
+  commit; resolve with `git log --oneline --grep='approved model recovery'`).
 - Phase 1 changes: added data/training entry workflows and a reusable approved
   Airflow executor; selective Docker validation; serving-only automatic publishing
   with manual training-image selection; cached builds/dependencies; ECR digests
@@ -43,8 +43,26 @@
   a valid bearer token, and `ML_PIPELINE_EXECUTION_ENABLED=true`. Configure required
   reviewers on the production environment. Current private Airflow is not exposed
   by this change. Existing manual DAG/UI entry points remain available.
-- Next: Phase 2 — persistent approved-model recovery into a fresh registry.
-- Remaining: Phase 2 registry recovery; Phase 3 k6; Phase 4 dashboards;
+- Phase 2 changes: `training/recovery.py` exports an approved alias plus all model
+  files and provenance to the existing snapshots prefix. It restores verified
+  artifacts into a fresh MLflow DB, rebinds run/release identities, preserves
+  original IDs, publishes aliases last and reuses prepared recovery versions.
+  Initial registration and successful challenger promotion persist champion when
+  configured; Airflow Helm supplies the store. MLflow now uses the shared digest
+  helper too. Artifact bucket has Terraform prevent_destroy. Recovery instructions
+  and limitations: `docs/model-recovery.md`; tests: `tests/test_model_recovery.py`.
+- Phase 2 validation: 8 recovery tests passed (real local registry and inference
+  loader; corruption, interrupted retry, outage, mocked S3). Full suite: **130
+  passed**, 14 dependency warnings. Ruff, actionlint, Helm lint, Terraform fmt and
+  bootstrap/production Terraform validate passed. No AWS write or actual training.
+- MLflow detail: use the exact logged-model URI recorded in training provenance
+  for backup downloads; registry-version downloads generate different metadata.
+- Production limitation: release the new runtime and explicitly export the
+  existing champion before teardown. No backup was written to production during
+  this task. Recovery must be serialized with promotion (no MLflow alias CAS).
+  S3 checksums are not signatures; retain restricted writers/Object Lock.
+- Next: Phase 3 — reproducible local/test k6 scenarios and lightweight CI.
+- Remaining: Phase 3 k6; Phase 4 dashboards;
   Phase 5 optional autoscaling proposal only if earlier phases complete.
 - No deployments, AWS mutation, full training or node provisioning authorized.
 - GitOps production applications require operator sync; a merged image PR alone
@@ -57,6 +75,7 @@ git status --short
 git log -6 --oneline
 cat docs/codex-checkpoint.md
 .venv/bin/pytest tests/test_delivery_workflows.py tests/test_training_dag.py tests/test_feature_build_dag.py
+.venv/bin/pytest -q tests/test_model_recovery.py
 ```
 
 Continuation prompt:
