@@ -23,8 +23,8 @@
 
 ## Delivery state
 
-- Completed: Phase 0 (`acd0222`); Phase 1 (`e876ff1`); Phase 2 (this milestone
-  commit; resolve with `git log --oneline --grep='approved model recovery'`).
+- Completed: Phase 0 (`acd0222`); Phase 1 (`e876ff1`); Phase 2 (`8341b87`);
+  Phase 3 (this milestone; `git log --oneline --grep='reproducible local k6'`).
 - Phase 1 changes: added data/training entry workflows and a reusable approved
   Airflow executor; selective Docker validation; serving-only automatic publishing
   with manual training-image selection; cached builds/dependencies; ECR digests
@@ -61,8 +61,20 @@
   existing champion before teardown. No backup was written to production during
   this task. Recovery must be serialized with promotion (no MLflow alias CAS).
   S3 checksums are not signatures; retain restricted writers/Object Lock.
-- Next: Phase 3 — reproducible local/test k6 scenarios and lightweight CI.
-- Remaining: Phase 3 k6; Phase 4 dashboards;
+- Phase 3 changes: `tests/k6/{smoke,baseline,burst,common}.js`, deterministic
+  existing listing samples, configurable provisional thresholds, explicit remote
+  opt-in, recovery-window metrics, local real-FastAPI fixture and instructions.
+  `.github/workflows/k6.yml` runs one-user local smoke only.
+- Phase 3 validation: actual k6 1.3.0 local runs all exited zero: 3-second smoke
+  (3 predictions), shortened 100-VU baseline (300), shortened 10-VU burst (87)
+  with recovery samples. All error rates zero; fixture p95s 8.72/542.36/18.47 ms,
+  recovery p95 19.73 ms. These are script/transport checks, not production
+  performance results. 3 payload-schema tests passed; actionlint and diff checks
+  passed. Default 100-VU/5-minute baseline and 130-second burst options inspected.
+  Remote-host rejection tested via `k6 inspect -e BASE_URL=https://platf0rm.site`
+  (no request issued). Fixture server stopped.
+- Next: Phase 4 — focused dashboard/metric contract checks, offline first.
+- Remaining: Phase 4 dashboards;
   Phase 5 optional autoscaling proposal only if earlier phases complete.
 - No deployments, AWS mutation, full training or node provisioning authorized.
 - GitOps production applications require operator sync; a merged image PR alone
@@ -76,6 +88,8 @@ git log -6 --oneline
 cat docs/codex-checkpoint.md
 .venv/bin/pytest tests/test_delivery_workflows.py tests/test_training_dag.py tests/test_feature_build_dag.py
 .venv/bin/pytest -q tests/test_model_recovery.py
+.venv/bin/pytest -q tests/test_k6_contract.py
+k6 run tests/k6/smoke.js  # start the local fixture first; see tests/k6/README.md
 ```
 
 Continuation prompt:

@@ -1,0 +1,44 @@
+name: Local k6 smoke
+on:
+  pull_request:
+    paths: [tests/k6/**, serving/app/**, .github/workflows/k6.yml, pyproject.toml, uv.lock]
+  push:
+    branches: [main]
+    paths: [tests/k6/**, serving/app/**, .github/workflows/k6.yml, pyproject.toml, uv.lock]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: k6-smoke-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.28"
+          enable-cache: true
+      - run: uv sync --frozen --extra test
+      - name: Start real HTTP application with local fixture model
+        run: |
+          uv run uvicorn fixture_app:app --app-dir tests/k6 --host 127.0.0.1 --port 8000 > /tmp/k6-app.log 2>&1 &
+          echo "$!" > /tmp/k6-app.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8000/ready > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          tail -30 /tmp/k6-app.log
+          exit 1
+      - name: Run one-user local smoke only
+        run: >-
+          docker run --rm --network host -v "$PWD:/work" -w /work
+          grafana/k6:1.3.0 run tests/k6/smoke.js
+      - name: Stop fixture
+        if: always()
+        run: if [ -f /tmp/k6-app.pid ]; then kill "$(cat /tmp/k6-app.pid)" || true; fi
