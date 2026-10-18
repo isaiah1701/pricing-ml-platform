@@ -36,7 +36,7 @@
     {
       "type": "table", "title": "Loaded model versions", "id": 6,
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "airbnb_loaded_model_info", "format": "table", "instant": true, "refId": "A"}],
+      "targets": [{"expr": "max without (job, service) (airbnb_loaded_model_info)", "format": "table", "instant": true, "refId": "A"}],
       "gridPos": {"h": 10, "w": 8, "x": 16, "y": 7}
     },
     {
@@ -104,5 +104,5 @@
   "time": {"from": "now-7d", "to": "now"},
   "title": "Airbnb Model and Drift Health",
   "uid": "airbnb-model-drift",
-  "version": 1
+  "version": 2
 }

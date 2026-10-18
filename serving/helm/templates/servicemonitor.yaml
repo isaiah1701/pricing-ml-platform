@@ -15,6 +15,7 @@ spec:
       {{- include "airbnb.selectorLabels" . | nindent 6 }}
   endpoints:
     - port: http
+      honorLabels: true
       path: /metrics
       interval: {{ .Values.monitoring.serviceMonitor.interval | quote }}
       scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout | quote }}

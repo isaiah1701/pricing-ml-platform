@@ -6,31 +6,31 @@
     {
       "type": "stat", "title": "Predictions per minute", "id": 1,
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "60 * sum(rate(airbnb_predicted_price_dollars_count[5m]))", "refId": "A"}],
+      "targets": [{"expr": "60 * sum(max without (job, service) (rate(airbnb_predicted_price_dollars_count[5m])))", "refId": "A"}],
       "gridPos": {"h": 7, "w": 8, "x": 0, "y": 0}
     },
     {
       "type": "stat", "title": "Mean predicted nightly price", "id": 2,
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "sum(rate(airbnb_predicted_price_dollars_sum[15m])) / clamp_min(sum(rate(airbnb_predicted_price_dollars_count[15m])), 0.001)", "refId": "A"}],
+      "targets": [{"expr": "sum(max without (job, service) (rate(airbnb_predicted_price_dollars_sum[15m]))) / clamp_min(sum(max without (job, service) (rate(airbnb_predicted_price_dollars_count[15m]))), 0.001)", "refId": "A"}],
       "gridPos": {"h": 7, "w": 8, "x": 8, "y": 0}
     },
     {
       "type": "stat", "title": "Serving success ratio", "id": 3,
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "sum(rate(airbnb_http_requests_total{endpoint=\"/predict\",status=\"200\"}[15m])) / clamp_min(sum(rate(airbnb_http_requests_total{endpoint=\"/predict\"}[15m])), 0.001)", "refId": "A"}],
+      "targets": [{"expr": "sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint=\"/predict\",status=\"200\"}[15m]))) / clamp_min(sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint=\"/predict\"}[15m]))), 0.001)", "refId": "A"}],
       "gridPos": {"h": 7, "w": 8, "x": 16, "y": 0}
     },
     {
       "type": "timeseries", "title": "Predicted price distribution", "id": 4,
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "sum by (le) (rate(airbnb_predicted_price_dollars_bucket[15m]))", "legendFormat": "up to ${{le}}", "refId": "A"}],
+      "targets": [{"expr": "sum by (le) (max without (job, service) (rate(airbnb_predicted_price_dollars_bucket[15m])))", "legendFormat": "up to ${{le}}", "refId": "A"}],
       "gridPos": {"h": 10, "w": 16, "x": 0, "y": 7}
     },
     {
       "type": "table", "title": "Active model", "id": 5,
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "airbnb_loaded_model_info", "format": "table", "instant": true, "refId": "A"}],
+      "targets": [{"expr": "max without (job, service) (airbnb_loaded_model_info)", "format": "table", "instant": true, "refId": "A"}],
       "gridPos": {"h": 10, "w": 8, "x": 16, "y": 7}
     }
   ],
@@ -40,5 +40,5 @@
   "time": {"from": "now-24h", "to": "now"},
   "title": "Airbnb Pricing Business Metrics",
   "uid": "airbnb-pricing-business",
-  "version": 1
+  "version": 2
 }

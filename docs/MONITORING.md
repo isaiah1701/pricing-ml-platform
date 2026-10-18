@@ -121,6 +121,11 @@ Import or provision the three dashboards in
 The dashboards intentionally use only bounded labels. Request features and raw
 listing data are never exported as metrics.
 
+The serving ServiceMonitor preserves application labels so `/predict` remains
+the request endpoint instead of the scrape port name. Serving dashboard queries
+deduplicate the `job` and `service` scrape labels per pod: stable and canary
+Services can point to the same pod between rollouts and must not double counts.
+
 ## Production web access
 
 Production exposes Grafana at `https://grafana.platf0rm.site` and MLflow at
