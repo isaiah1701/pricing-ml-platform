@@ -6,8 +6,8 @@
   reviewed Terraform binary-plan handoff, and removal of the k6 workflow.
 - Phase B: `ab2a603` — protected manual Helmfile/Argo bootstrap with account,
   region, cluster, capacity, ownership and idempotence guards.
-- Phase C: completed in the commit titled
-  `ci: verify GitOps releases and retained model recovery end to end`.
+- Phase C: `8bdde80` — GitOps release verification, retained-bundle verification,
+  recovery documentation and final integration regressions.
 - Exactly eight workflows: **ML Data, ML Training, ML Deploy, Docker,
   Terraform Plan, Terraform Apply, Bootstrap, Kubernetes**. Local k6 remains in
   `tests/k6/`; there is no performance-testing workflow.
