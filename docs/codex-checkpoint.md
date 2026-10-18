@@ -24,8 +24,9 @@
 ## Delivery state
 
 - Completed: Phase 0 (`acd0222`); Phase 1 (`e876ff1`); Phase 2 (`8341b87`);
-  Phase 3 (`ecf4ff9`); Phase 4 (this milestone;
-  `git log --oneline --grep='dashboard metric contracts'`).
+  Phase 3 (`ecf4ff9`); Phase 4 (`43cb04d`). Phase 5 delivered only as the
+  permitted tested proposal (this milestone;
+  `git log --oneline --grep='isolated two-node autoscaling proposal'`).
 - Phase 1 changes: added data/training entry workflows and a reusable approved
   Airflow executor; selective Docker validation; serving-only automatic publishing
   with manual training-image selection; cached builds/dependencies; ECR digests
@@ -89,9 +90,27 @@
 - Monitoring limitation: Airflow DAG-failure counters are not exported; inspect
   Airflow runs directly. MLflow readiness is a Kubernetes probe, not registry API
   validation. Drift/outcome data still depend on the existing batch jobs.
-- Next: Phase 5 feasibility review; only a tested proposal if substantial changes
-  are needed. No infrastructure application is authorized.
-- Remaining: Phase 5 optional autoscaling proposal.
+- Phase 5 proposal: `docs/proposals/autoscaling/` contains provider-free Terraform
+  outputs for the NodePool/EC2NodeClass, a min=1/max=2 HPA overlay, policy tests,
+  controller placement/IAM/bootstrap/disruption analysis and explicit blockers.
+  Helm accepts HPA behavior and omits Rollout replicas when HPA owns scaling.
+  The proposal is outside GitOps; production remains fixed at one worker/no HPA.
+- Phase 5 validation: Terraform fmt/init/validate and its offline test passed;
+  20 targeted HPA/canary/workflow tests and proposal Helm lint passed. Final
+  full Python suite: **137 passed**, 14 dependency warnings; Ruff, actionlint and
+  diff checks passed. No Docker builds, GitHub runs, AWS mutation or retraining.
+- Remaining: actual Karpenter integration is NOT implemented. Controller IAM,
+  worker profile/EKS access, pinned controller/CRDs, Argo replica ownership, live
+  Metrics Server and capacity testing require a separate infrastructure change.
+  Karpenter's eventually consistent limits do not prove the strict global
+  two-node ceiling, including replacements. This blocks activation, not the
+  completed offline proposal. See the proposal README's official references.
+- Next: review/resolve the strict node budget and activation gates before any
+  autoscaling implementation. Do not apply the proposal as if it were finished.
+- User approval required for deployment, AWS infrastructure changes, production
+  export/restore, full training or additional nodes. Nothing was pushed or deployed.
+- Preserved final worktree changes: `README.md`, `load-tests/`, `skills/` from
+  before this refactor. All refactor changes are committed by milestone.
 - No deployments, AWS mutation, full training or node provisioning authorized.
 - GitOps production applications require operator sync; a merged image PR alone
   does not imply a deployed or verified release.
@@ -106,6 +125,9 @@ cat docs/codex-checkpoint.md
 .venv/bin/pytest -q tests/test_model_recovery.py
 .venv/bin/pytest -q tests/test_k6_contract.py
 .venv/bin/pytest -q tests/test_monitoring_dashboards.py
+.venv/bin/pytest -q
+terraform -chdir=docs/proposals/autoscaling init -backend=false
+terraform -chdir=docs/proposals/autoscaling test
 k6 run tests/k6/smoke.js  # start the local fixture first; see tests/k6/README.md
 ```
 
