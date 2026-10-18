@@ -212,6 +212,20 @@ addons:
     chart: kube-prometheus-stack
     chartVersion: 92.3.0
     values:
+      # EKS manages these components outside worker-node endpoint discovery.
+      # Keep API server, kubelet, kube-proxy, node and workload monitoring enabled.
+      kubeScheduler:
+        enabled: false
+      kubeControllerManager:
+        enabled: false
+      kubeEtcd:
+        enabled: false
+      defaultRules:
+        rules:
+          kubeSchedulerAlerting: false
+          kubeSchedulerRecording: false
+          kubeControllerManager: false
+          etcd: false
       grafana:
         enabled: true
         envFromSecrets:
