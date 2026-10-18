@@ -37,7 +37,7 @@ metadata:
   name: {{ $public.mlflowAuthSecretName }}
   namespace: {{ .Values.platform.mlflow.namespace }}
 spec:
-  refreshInterval: 5m
+  refreshInterval: 5m0s
   secretStoreRef:
     name: {{ .Values.platform.secretStoreName }}
     kind: ClusterSecretStore

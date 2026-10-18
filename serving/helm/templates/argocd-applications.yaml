@@ -64,8 +64,17 @@ spec:
   destination:
     server: {{ $.Values.destination.server }}
     namespace: {{ $addon.namespace }}
+  {{- with $addon.ignoreDifferences }}
+  ignoreDifferences:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   syncPolicy:
-    syncOptions: ["CreateNamespace=true", "ServerSideApply=true"]
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      {{- if $addon.ignoreDifferences }}
+      - RespectIgnoreDifferences=true
+      {{- end }}
     {{- if $.Values.syncPolicy.automated }}
     automated:
       prune: {{ $.Values.syncPolicy.prune }}

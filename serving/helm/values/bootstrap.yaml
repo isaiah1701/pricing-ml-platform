@@ -194,6 +194,20 @@ addons:
     name: kube-prometheus-stack
     namespace: monitoring
     syncWave: '-2'
+    # Preserve Grafana's generated login across Helm renders and manual syncs.
+    ignoreDifferences:
+      - group: ''
+        kind: Secret
+        name: kube-prometheus-stack-grafana
+        namespace: monitoring
+        jsonPointers:
+          - /data/admin-password
+      - group: apps
+        kind: Deployment
+        name: kube-prometheus-stack-grafana
+        namespace: monitoring
+        jsonPointers:
+          - /spec/template/metadata/annotations/checksum~1secret
     chartRepo: https://prometheus-community.github.io/helm-charts
     chart: kube-prometheus-stack
     chartVersion: 92.3.0
