@@ -19,6 +19,7 @@ feature_repo/data/
 
 # Content-addressed datasets are runtime artifacts retained outside Git.
 data/snapshots/
+data/training-checkpoints/
 
 # MLflow's local tracking database and model artifacts.
 mlflow.db

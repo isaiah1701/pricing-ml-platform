@@ -61,6 +61,7 @@ data:
   AIRBNB_SNAPSHOT_S3_URI: {{ printf "s3://%s/snapshots" $airflow.dataBucket | quote }}
   APPROVED_MODEL_STORE: {{ printf "s3://%s/snapshots/approved-models" $airflow.dataBucket | quote }}
   AIRBNB_TRAINING_WORK_DIR: /opt/airflow/training-work
+  AIRBNB_TRAINING_CHECKPOINT_DIR: /opt/airflow/training-checkpoints
   DRIFT_REFERENCE_PATH: /opt/airflow/work/listing_features.parquet
   DRIFT_PRODUCTION_PATH: /opt/airflow/input/production_features.parquet
   PRODUCTION_EVENTS_PREFIX: production/events

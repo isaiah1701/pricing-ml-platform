@@ -228,6 +228,8 @@ class CatBoostPriceEnsembleRegressor(RegressorMixin, BaseEstimator):
         depth: int = TREE_DEPTH,
         l2_leaf_reg: float = L2_LEAF_REG,
         random_strength: float = RANDOM_STRENGTH,
+        checkpoint_dir: str | None = None,
+        snapshot_interval: int = 60,
     ) -> None:
         """Store the validation-selected champion configuration."""
         self.feature_names = feature_names
@@ -237,6 +239,8 @@ class CatBoostPriceEnsembleRegressor(RegressorMixin, BaseEstimator):
         self.depth = depth
         self.l2_leaf_reg = l2_leaf_reg
         self.random_strength = random_strength
+        self.checkpoint_dir = checkpoint_dir
+        self.snapshot_interval = snapshot_interval
 
     def _prepare_features(self, x: pd.DataFrame) -> pd.DataFrame:
         """Select model inputs and normalize categorical values."""
@@ -259,7 +263,7 @@ class CatBoostPriceEnsembleRegressor(RegressorMixin, BaseEstimator):
     def fit(
         self, x: pd.DataFrame, y: pd.Series | np.ndarray
     ) -> CatBoostPriceEnsembleRegressor:
-        """Fit all champion members on log-transformed positive prices."""
+        """Fit or resume identity-bound ensemble members on positive log prices."""
         if not self.random_states or len(self.random_states) != len(self.iterations):
             LOGGER.error("Ensemble seeds and iteration counts do not align")
             raise ValueError(
@@ -279,33 +283,47 @@ class CatBoostPriceEnsembleRegressor(RegressorMixin, BaseEstimator):
         categorical = [
             name for name in CATEGORICAL_FEATURES if name in prepared.columns
         ]
+        from contextlib import nullcontext
+
+        # Imported only during training: the serving image needs no checkpoint module.
+        from training.checkpoints import (
+            checkpoint_directory,
+            fit_member,
+            training_identity,
+        )
+
+        checkpoint_root = self.checkpoint_dir
+        if checkpoint_root is None:
+            checkpoint_root = os.getenv(
+                "AIRBNB_TRAINING_CHECKPOINT_DIR", str(PROJECT_ROOT / "data/training-checkpoints")
+            )
+        if type(self.snapshot_interval) is not int or self.snapshot_interval < 1:
+            raise ValueError("snapshot_interval must be a positive integer")
+        common = {
+            "loss_function": "RMSE", "learning_rate": self.learning_rate,
+            "depth": self.depth, "l2_leaf_reg": self.l2_leaf_reg,
+            "random_strength": self.random_strength,
+        }
+        transformed_target = np.log1p(target)
+        identity = training_identity(prepared, transformed_target, {
+            **common, "random_states": self.random_states, "iterations": self.iterations,
+        })
+        session = (checkpoint_directory(Path(checkpoint_root), identity)
+                   if checkpoint_root else nullcontext(None))
         self.models_: list[CatBoostRegressor] = []
-        for random_state, iterations in zip(
-            self.random_states, self.iterations, strict=True
-        ):
-            LOGGER.info(
-                "Fitting champion member seed=%d iterations=%d",
-                random_state,
-                iterations,
-            )
-            model = CatBoostRegressor(
-                loss_function="RMSE",
-                iterations=iterations,
-                learning_rate=self.learning_rate,
-                depth=self.depth,
-                l2_leaf_reg=self.l2_leaf_reg,
-                random_strength=self.random_strength,
-                random_seed=random_state,
-                allow_writing_files=False,
-                verbose=False,
-            )
-            model.fit(
-                prepared,
-                np.log1p(target),
-                cat_features=categorical,
-                verbose=False,
-            )
-            self.models_.append(model)
+        with session as directory:
+            for member, (random_state, iterations) in enumerate(zip(
+                self.random_states, self.iterations, strict=True
+            )):
+                parameters = {**common, "iterations": iterations, "random_seed": random_state}
+                if directory is not None:
+                    model = fit_member(prepared, transformed_target, categorical, parameters,
+                                       directory, member, self.snapshot_interval)
+                else:
+                    LOGGER.info("Fitting ensemble member %d without checkpointing", member)
+                    model = CatBoostRegressor(**parameters, allow_writing_files=False, verbose=False)
+                    model.fit(prepared, transformed_target, cat_features=categorical, verbose=False)
+                self.models_.append(model)
         self.feature_names_in_ = np.asarray(prepared.columns, dtype=object)
         return self
 

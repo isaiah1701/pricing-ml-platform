@@ -1,5 +1,21 @@
 # CI/CD refactor checkpoint
 
+## Follow-up: training checkpoints and workflow separation
+
+- User requested resumable training, removal of the k6 workflow, exactly three ML
+  entry points plus separate Docker/Kubernetes/Terraform Plan/Terraform Apply.
+- Reference repository's four workflow files were read through GitHub's public
+  API/raw URLs after browser access to the directory failed. Reuse its separation
+  of concerns and exact-plan artifact handoff; keep explicit apply/deploy gates.
+- Training checkpoint milestone: native per-member CatBoost snapshots, completed
+  member reuse, ordered input/config/code/version identity, filesystem locking,
+  atomic completed models/checksums, Airflow PVC path and ignored local storage.
+- Targeted verification: 11 checkpoint/training tests passed, including actual
+  interrupted native snapshot resume and prediction parity. No full ensemble run.
+- Details/limits: `docs/training-checkpoints.md`. PVC resume is not S3 retention.
+- Next: reorganize and validate workflows; preserve the pre-existing README,
+  load-tests and skills changes. Do not deploy, apply or push.
+
 ## Baseline — Phase 0 complete
 
 - Branch `main`, starting commit `3887009`.
