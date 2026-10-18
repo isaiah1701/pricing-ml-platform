@@ -2,31 +2,74 @@ rule_files:
   - dashboard-rules.yml
 evaluation_interval: 1m
 tests:
-  - name: stable and canary scrapes count each pod once
+  - name: stable and canary scrapes count each pod once and actual pod hashes classify traffic
     interval: 1m
     input_series:
-      - series: 'airbnb_readiness{pod="one",job="stable",service="inference"}'
+      - series: 'airbnb_readiness{namespace="airbnb-inference",pod="one",job="stable",service="inference"}'
         values: '1+0x10'
-      - series: 'airbnb_readiness{pod="one",job="canary",service="inference-canary"}'
+      - series: 'airbnb_readiness{namespace="airbnb-inference",pod="one",job="canary",service="inference-canary"}'
         values: '1+0x10'
-      - series: 'airbnb_readiness{pod="two",job="stable",service="inference"}'
+      - series: 'airbnb_readiness{namespace="airbnb-inference",pod="two",job="stable",service="inference"}'
         values: '1+0x10'
-      - series: 'airbnb_http_requests_total{pod="one",job="stable",service="inference",endpoint="/predict",status="200"}'
+      - series: 'airbnb_http_requests_total{namespace="airbnb-inference",pod="one",job="stable",service="inference",endpoint="/predict",status="200"}'
         values: '0+60x10'
-      - series: 'airbnb_http_requests_total{pod="one",job="canary",service="inference-canary",endpoint="/predict",status="200"}'
+      - series: 'airbnb_http_requests_total{namespace="airbnb-inference",pod="one",job="canary",service="inference-canary",endpoint="/predict",status="200"}'
         values: '0+60x10'
-      - series: 'airbnb_http_requests_total{pod="two",job="stable",service="inference",endpoint="/predict",status="200"}'
+      - series: 'airbnb_http_requests_total{namespace="airbnb-inference",pod="two",job="stable",service="inference",endpoint="/predict",status="200"}'
         values: '0+120x10'
-      - series: 'airbnb_http_requests_total{pod="two",job="stable",service="inference",endpoint="/health",status="200"}'
+      - series: 'airbnb_http_requests_total{namespace="airbnb-inference",pod="two",job="stable",service="inference",endpoint="/health",status="200"}'
         values: '0+600x10'
+      - series: 'kube_pod_labels{namespace="airbnb-inference",pod="one",label_rollouts_pod_template_hash="old"}'
+        values: '1+0x10'
+      - series: 'kube_pod_labels{namespace="airbnb-inference",pod="two",label_rollouts_pod_template_hash="new"}'
+        values: '1+0x10'
+      - series: 'mlops_rollout_stable_info{namespace="airbnb-inference",rollout="inference",revision="old"}'
+        values: '1+0x10'
     promql_expr_test:
-      - expr: dashboard_airbnb_service_health_1_A
+      - expr: dashboard_airbnb_service_health_5_A
         eval_time: 10m
         exp_samples:
-          - labels: '{__name__="dashboard_airbnb_service_health_1_A"}'
+          - labels: '{__name__="dashboard_airbnb_service_health_5_A"}'
             value: 2
-      - expr: dashboard_airbnb_service_health_2_A
+      - expr: dashboard_airbnb_pricing_business_1_A
         eval_time: 10m
         exp_samples:
-          - labels: '{__name__="dashboard_airbnb_service_health_2_A"}'
+          - labels: '{__name__="dashboard_airbnb_pricing_business_1_A"}'
             value: 3
+      - expr: dashboard_airbnb_service_health_6_A
+        eval_time: 10m
+        exp_samples:
+          - labels: '{__name__="dashboard_airbnb_service_health_6_A"}'
+            value: 1
+      - expr: dashboard_airbnb_service_health_6_B
+        eval_time: 10m
+        exp_samples:
+          - labels: '{__name__="dashboard_airbnb_service_health_6_B"}'
+            value: 2
+  - name: a healthy evaluation and missing evaluation remain distinct
+    interval: 1m
+    input_series:
+      - series: 'airbnb_dataset_drift'
+        values: '0+0x10'
+      - series: 'airbnb_drift_last_success_timestamp_seconds'
+        values: '1+0x10'
+    promql_expr_test:
+      - expr: dashboard_airbnb_model_drift_3_A
+        eval_time: 10m
+        exp_samples:
+          - labels: '{__name__="dashboard_airbnb_model_drift_3_A"}'
+            value: 0
+      - expr: dashboard_airbnb_model_drift_2_A
+        eval_time: 10m
+        exp_samples:
+          - labels: '{__name__="dashboard_airbnb_model_drift_2_A"}'
+            value: 599
+  - name: missing drift data never becomes healthy zero
+    interval: 1m
+    promql_expr_test:
+      - expr: dashboard_airbnb_model_drift_3_A
+        eval_time: 10m
+        exp_samples: []
+      - expr: dashboard_airbnb_model_drift_2_A
+        eval_time: 10m
+        exp_samples: []

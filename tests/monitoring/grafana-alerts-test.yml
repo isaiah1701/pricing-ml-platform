@@ -1,0 +1,88 @@
+rule_files:
+- grafana-rules.yml
+evaluation_interval: 1m
+tests:
+- name: drift breach resolves on next completed evaluation
+  interval: 1m
+  input_series:
+  - series: airbnb_dataset_drift
+    values: 1 1 1 0 0 0
+  - series: airbnb_drift_last_success_timestamp_seconds
+    values: 0+60x5
+  alert_rule_test:
+  - eval_time: 2m
+    alertname: ModelDriftDetected
+    exp_alerts:
+    - exp_labels: {}
+      exp_annotations: {}
+  - eval_time: 4m
+    alertname: ModelDriftDetected
+    exp_alerts: []
+- name: stale drift remains distinct from resolved drift
+  interval: 1m
+  input_series:
+  - series: airbnb_dataset_drift
+    values: 0+0x1600
+  - series: airbnb_drift_last_success_timestamp_seconds
+    values: 0+0x1600
+  alert_rule_test:
+  - eval_time: 26h30m
+    alertname: DriftMonitoringStale
+    exp_alerts:
+    - exp_labels: {}
+      exp_annotations: {}
+  - eval_time: 26h30m
+    alertname: ModelDriftDetected
+    exp_alerts: []
+- name: missing drift is stale after pending interval
+  interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 16m
+    alertname: DriftMonitoringStale
+    exp_alerts:
+    - exp_labels: {}
+      exp_annotations: {}
+- name: sparse errors do not create traffic alerts
+  interval: 1m
+  input_series:
+  - series: airbnb_http_requests_total{endpoint="/predict",status="500"}
+    values: 0+1x20
+  - series: airbnb_prediction_latency_seconds_bucket{le="0.25"}
+    values: 0+0x20
+  - series: airbnb_prediction_latency_seconds_bucket{le="+Inf"}
+    values: 0+1x20
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: HighInferenceErrorRate
+    exp_alerts: []
+  - eval_time: 15m
+    alertname: HighInferenceLatency
+    exp_alerts: []
+- name: sustained errors with enough traffic alert
+  interval: 1m
+  input_series:
+  - series: airbnb_http_requests_total{endpoint="/predict",status="500"}
+    values: 0+60x20
+  - series: airbnb_http_requests_total{endpoint="/predict",status="200"}
+    values: 0+540x20
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: HighInferenceErrorRate
+    exp_alerts:
+    - exp_labels: {}
+      exp_annotations: {}
+- name: healthy and unavailable inference
+  interval: 1m
+  input_series:
+  - series: airbnb_readiness
+    values: 1 1 0 0 0 0
+  alert_rule_test:
+  - eval_time: 1m
+    alertname: InferenceDown
+    exp_alerts: []
+  - eval_time: 5m
+    alertname: InferenceDown
+    exp_alerts:
+    - exp_labels: {}
+      exp_annotations: {}

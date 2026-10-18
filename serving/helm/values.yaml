@@ -23,6 +23,7 @@ rollout:
   pauseDuration: 2m
   analysisInterval: 1m
   analysisCount: 3
+  minimumRequests: 20
   errorRateThreshold: 0.05
   p95LatencyThresholdSeconds: 0.25
 
@@ -158,6 +159,11 @@ platform:
   enabled: false
   awsRegion: eu-west-2
   secretStoreName: platform-aws-secrets-manager
+  grafanaAlerting:
+    notifications:
+      enabled: false
+      email: ""
+      smtpSecretArn: ""
   publicIngress:
     enabled: false
     grafanaHost: ""

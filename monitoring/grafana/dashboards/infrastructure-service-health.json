@@ -1,295 +1,418 @@
 {
-  "annotations": {
-    "list": []
-  },
+  "title": "Kubernetes & Delivery",
+  "uid": "airbnb-service-health",
+  "schemaVersion": 39,
+  "version": 4,
   "editable": true,
   "graphTooltip": 1,
-  "panels": [
-    {
-      "type": "stat",
-      "title": "Ready replicas",
-      "id": 1,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum(max without (job, service) (airbnb_readiness))",
-          "refId": "A"
-        }
-      ],
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 0,
-        "y": 0
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Prediction request rate",
-      "id": 2,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint=\"/predict\"}[5m])))",
-          "legendFormat": "requests/s",
-          "refId": "A"
-        }
-      ],
-      "gridPos": {
-        "h": 8,
-        "w": 9,
-        "x": 6,
-        "y": 0
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Prediction error rate",
-      "id": 3,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint=\"/predict\",status=~\"5..\"}[5m]))) / clamp_min(sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint=\"/predict\"}[5m]))), 0.001)",
-          "legendFormat": "error ratio",
-          "refId": "A"
-        }
-      ],
-      "gridPos": {
-        "h": 8,
-        "w": 9,
-        "x": 15,
-        "y": 0
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Prediction latency percentiles",
-      "id": 4,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.50, sum by (le) (max without (job, service) (rate(airbnb_prediction_latency_seconds_bucket[5m]))))",
-          "legendFormat": "p50",
-          "refId": "A"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum by (le) (max without (job, service) (rate(airbnb_prediction_latency_seconds_bucket[5m]))))",
-          "legendFormat": "p95",
-          "refId": "B"
-        },
-        {
-          "expr": "histogram_quantile(0.99, sum by (le) (max without (job, service) (rate(airbnb_prediction_latency_seconds_bucket[5m]))))",
-          "legendFormat": "p99",
-          "refId": "C"
-        }
-      ],
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 8
-      },
-      "description": "Queue wait and inference latency; excludes event persistence and final HTTP serialization."
-    },
-    {
-      "type": "timeseries",
-      "title": "CPU and memory",
-      "id": 5,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum(max by (namespace, pod, container) (rate(container_cpu_usage_seconds_total{namespace=\"airbnb-inference\",container=\"inference\"}[5m])))",
-          "legendFormat": "CPU cores",
-          "refId": "A"
-        },
-        {
-          "expr": "sum(max by (namespace, pod, container) (container_memory_working_set_bytes{namespace=\"airbnb-inference\",container=\"inference\"}))",
-          "legendFormat": "memory bytes",
-          "refId": "B"
-        }
-      ],
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 8
-      },
-      "description": "Kubernetes inference container CPU cores and memory bytes; separate units on the field axes.",
-      "fieldConfig": {
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "CPU cores"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "cores"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "memory bytes"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "bytes"
-              },
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Node CPU utilisation",
-      "id": 6,
-      "description": "Node exporter CPU utilisation, including all platform workloads.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
-          "legendFormat": "node {{instance}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 17
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Node memory utilisation",
-      "id": 7,
-      "description": "Node exporter memory utilisation.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
-          "legendFormat": "node {{instance}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 17
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Platform available replicas",
-      "id": 8,
-      "description": "Kubernetes readiness for Airflow and MLflow deployments. This is not DAG success or an end-to-end registry API probe.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace=~\"airflow|mlflow\",deployment=~\"airflow|mlflow\"})",
-          "legendFormat": "{{deployment}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 25
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Platform container readiness",
-      "id": 9,
-      "description": "Per-container Kubernetes readiness; Airflow components have heartbeat/API probes.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "min by (namespace, pod, container) (kube_pod_container_status_ready{namespace=~\"airflow|mlflow\"})",
-          "legendFormat": "{{pod}} / {{container}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 25
-      }
-    }
-  ],
-  "schemaVersion": 39,
   "tags": [
     "airbnb",
-    "infrastructure",
-    "serving"
+    "mlops"
   ],
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
   "templating": {
     "list": []
   },
-  "time": {
-    "from": "now-6h",
-    "to": "now"
+  "annotations": {
+    "list": []
   },
-  "title": "Airbnb Infrastructure and Service Health",
-  "uid": "airbnb-service-health",
-  "version": 3
+  "panels": [
+    {
+      "title": "Inference container readiness",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "min by (pod) (kube_pod_container_status_ready{namespace=\"airbnb-inference\",container=\"inference\"})",
+          "legendFormat": "{{pod}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 1,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Inference container restarts (1h)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"airbnb-inference\",container=\"inference\"}[1h]))",
+          "legendFormat": "{{pod}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 2,
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Inference CPU",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (pod) (max by (namespace, pod, container) (rate(container_cpu_usage_seconds_total{namespace=\"airbnb-inference\",container=\"inference\"}[5m])))",
+          "legendFormat": "{{pod}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cores",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 3,
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Inference memory",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (pod) (max by (namespace, pod, container) (container_memory_working_set_bytes{namespace=\"airbnb-inference\",container=\"inference\"}))",
+          "legendFormat": "{{pod}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 4,
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Ready inference replicas",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(max by (namespace, pod) (airbnb_readiness))",
+          "legendFormat": "{{pod}}",
+          "instant": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 5,
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Observed stable / canary request rates",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum((sum by (namespace, pod) (max by (namespace, pod, endpoint, method, status) (rate(airbnb_http_requests_total{endpoint=\"/predict\"}[5m]))) * on (namespace, pod) group_left(revision) label_replace(max by (namespace, pod, label_rollouts_pod_template_hash) (kube_pod_labels{namespace=\"airbnb-inference\",label_rollouts_pod_template_hash!=\"\"}), \"revision\", \"$1\", \"label_rollouts_pod_template_hash\", \"(.+)\")) * on (namespace, revision) group_left() max by (namespace, revision) (mlops_rollout_stable_info{namespace=\"airbnb-inference\"}))",
+          "legendFormat": "stable"
+        },
+        {
+          "refId": "B",
+          "expr": "(sum((sum by (namespace, pod) (max by (namespace, pod, endpoint, method, status) (rate(airbnb_http_requests_total{endpoint=\"/predict\"}[5m]))) * on (namespace, pod) group_left(revision) label_replace(max by (namespace, pod, label_rollouts_pod_template_hash) (kube_pod_labels{namespace=\"airbnb-inference\",label_rollouts_pod_template_hash!=\"\"}), \"revision\", \"$1\", \"label_rollouts_pod_template_hash\", \"(.+)\")) unless on (namespace, revision) max by (namespace, revision) (mlops_rollout_stable_info{namespace=\"airbnb-inference\"})) or (0 * sum(sum by (namespace, pod) (max by (namespace, pod, endpoint, method, status) (rate(airbnb_http_requests_total{endpoint=\"/predict\"}[5m]))) * on (namespace, pod) group_left(revision) label_replace(max by (namespace, pod, label_rollouts_pod_template_hash) (kube_pod_labels{namespace=\"airbnb-inference\",label_rollouts_pod_template_hash!=\"\"}), \"revision\", \"$1\", \"label_rollouts_pod_template_hash\", \"(.+)\")))) and on () (count(mlops_rollout_stable_info{namespace=\"airbnb-inference\",revision!=\"\"}) > 0)",
+          "legendFormat": "canary"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "Deduplicated process request rates joined to pod template hash. Stable uses Rollout status.stableRS; other active pod hashes are canary. Missing KSM identity remains unavailable rather than guessed from scrape Service labels.",
+      "id": 6,
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Current Rollout phase / revision",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (namespace, rollout, phase, revision) (mlops_rollout_info{namespace=\"airbnb-inference\"})",
+          "legendFormat": "{{pod}}",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "Kube-state-metrics live Rollout phase and currentPodHash; does not imply cumulative abort history.",
+      "id": 7,
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Retained canary analysis results",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (namespace, analysisrun, phase) (mlops_analysis_run_info{namespace=\"airbnb-inference\"})",
+          "legendFormat": "{{pod}}",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 8,
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Degraded rollout / failed analyses",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (rollout) (mlops_rollout_info{namespace=\"airbnb-inference\",phase=\"Degraded\"})",
+          "legendFormat": "{{rollout}} degraded",
+          "instant": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "max by (analysisrun) (mlops_analysis_run_info{namespace=\"airbnb-inference\",phase=~\"Failed|Error|Inconclusive\"})",
+          "legendFormat": "{{analysisrun}} {{phase}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "Current degraded or retained failed state; an aborted Rollout reports Degraded. Historical abort count is not inferred from gauges.",
+      "id": 9,
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "ReplicaSet available replicas",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (replicaset) (kube_replicaset_status_ready_replicas{namespace=\"airbnb-inference\"})",
+          "legendFormat": "{{replicaset}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 10,
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Verified model rollback events (24h)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(increase(airbnb_model_rollbacks_total[24h]))",
+          "legendFormat": "{{pod}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 11,
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Model rollback failures (24h)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(increase(airbnb_model_rollback_failures_total[24h]))",
+          "legendFormat": "{{pod}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 12,
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      }
+    }
+  ]
 }

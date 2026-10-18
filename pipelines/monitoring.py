@@ -13,7 +13,12 @@ from typing import TypedDict
 import boto3
 from airflow.sdk import DAG, Asset, dag, task
 
-from monitoring.drift_check import DriftResult, run_drift_check
+from monitoring.drift_check import (
+    DriftResult,
+    run_drift_check,
+    write_prometheus_metrics,
+)
+from monitoring.operational_metrics import pipeline_failure, pipeline_success
 from monitoring.production_events import materialize_production_window
 
 LOGGER = logging.getLogger(__name__)
@@ -87,6 +92,7 @@ def execute_drift_check(production_path: str) -> DriftResult:
         drift_threshold=FEATURE_DRIFT_THRESHOLD,
         dataset_drift_share_threshold=RETRAINING_SHARE_THRESHOLD,
         model_version=MODEL_VERSION,
+        publish_metrics=False,
     )
 
 
@@ -120,6 +126,7 @@ def publish_drift_artifacts(result: DriftResult) -> str:
             f"{report_prefix}/report.{extension}",
             ExtraArgs={"ContentType": content_type, "ServerSideEncryption": "AES256"},
         )
+    write_prometheus_metrics(result, Path(result["metrics_path"]))
     LOGGER.info("Published drift artifacts to s3://%s/%s", PLATFORM_DATA_BUCKET, report_prefix)
     return f"s3://{PLATFORM_DATA_BUCKET}/{report_prefix}"
 
@@ -173,6 +180,8 @@ def no_retraining_needed(result: DriftResult) -> None:
     start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
     catchup=False,
     max_active_runs=1,
+    on_success_callback=pipeline_success,
+    on_failure_callback=pipeline_failure,
     tags=["airbnb", "monitoring", "drift", "evidently"],
 )
 def monitoring_pipeline() -> None:

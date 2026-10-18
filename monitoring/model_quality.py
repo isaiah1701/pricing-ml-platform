@@ -16,6 +16,8 @@ import pandas as pd
 from prometheus_client import CollectorRegistry, Gauge, generate_latest, push_to_gateway
 from sklearn.metrics import mean_absolute_error, r2_score, root_mean_squared_error
 
+from monitoring.operational_metrics import persist_registry
+
 LOGGER = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTCOMES_PATH = PROJECT_ROOT / "data" / "model_outcomes.parquet"
@@ -258,6 +260,9 @@ def write_prometheus_metrics(
         temporary_file.write(generate_latest(registry))
     os.replace(temporary_path, metrics_path)
     LOGGER.info("Published model-quality metrics to %s", metrics_path)
+    if os.getenv("PLATFORM_DATA_BUCKET", "").strip():
+        persist_registry("model-quality", registry, datetime.fromisoformat(result["timestamp"]).timestamp())
+        return
     pushgateway_url = os.getenv("PROMETHEUS_PUSHGATEWAY_URL", "").strip()
     if pushgateway_url:
         push_to_gateway(

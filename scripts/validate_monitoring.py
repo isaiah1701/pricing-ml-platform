@@ -23,9 +23,35 @@ def metric_names(root: Path) -> set[str]:
         "serving/app/api.py",
         "monitoring/drift_check.py",
         "monitoring/model_quality.py",
+        "monitoring/operational_metrics.py",
     ):
-        tree = ast.parse((root / relative).read_text())
+        path = root / relative
+        if not path.exists():
+            continue
+        tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
+            if isinstance(node, ast.For):
+                bound = {item.id for item in ast.walk(node.target) if isinstance(item, ast.Name)}
+                if any(
+                    isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+                    and call.func.id in {"Gauge", "Counter", "Histogram"}
+                    and call.args and isinstance(call.args[0], ast.Name)
+                    and call.args[0].id in bound
+                    for statement in node.body for call in ast.walk(statement)
+                ):
+                    names.update(
+                        value.value for value in ast.walk(node.iter)
+                        if isinstance(value, ast.Constant) and isinstance(value.value, str)
+                        and value.value.startswith("airbnb_")
+                    )
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                if any(isinstance(target, ast.Name) and target.id == "METRIC_NAMES" for target in targets):
+                    names.update(
+                        value.value for value in ast.walk(node.value)
+                        if isinstance(value, ast.Constant) and isinstance(value.value, str)
+                        and value.value.startswith("airbnb_")
+                    )
             if (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Name)
@@ -40,6 +66,12 @@ def metric_names(root: Path) -> set[str]:
                     names.update(
                         f"{name}_{suffix}" for suffix in ("bucket", "count", "sum")
                     )
+    bootstrap = yaml.safe_load((root / "serving/helm/values/bootstrap.yaml").read_text())
+    custom = bootstrap["addons"]["monitoring"]["values"]["kube-state-metrics"]["customResourceState"]
+    if custom.get("enabled"):
+        for resource in custom["config"]["spec"]["resources"]:
+            prefix = resource.get("metricNamePrefix", "kube_customresource")
+            names.update(f"{prefix}_{metric['name']}" for metric in resource["metrics"])
     return names
 
 
@@ -82,7 +114,8 @@ def validate_dashboards(root: Path = PROJECT_ROOT) -> list[dict[str, Any]]:
                     raise ValueError(f"Duplicate target reference in {uid}")
                 refs.add(target["refId"])
                 expression = target["expr"]
-                used = set(re.findall(r"\bairbnb_[a-z0-9_]+", expression))
+                metric_expression = re.sub(r'"(?:[^"\\]|\\.)*"', '""', expression)
+                used = set(re.findall(r"\b(?:airbnb|mlops)_[a-z0-9_]+", metric_expression))
                 if used - declared:
                     raise ValueError(
                         f"Undefined application metrics: {sorted(used - declared)}"

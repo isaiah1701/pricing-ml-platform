@@ -1,108 +1,575 @@
 {
-  "annotations": {"list": []},
+  "title": "Model Quality & Drift",
+  "uid": "airbnb-model-drift",
+  "schemaVersion": 39,
+  "version": 4,
   "editable": true,
   "graphTooltip": 1,
+  "tags": [
+    "airbnb",
+    "mlops"
+  ],
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
   "panels": [
     {
-      "type": "stat", "title": "Dataset drift", "id": 1,
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "airbnb_dataset_drift", "refId": "A"}],
-      "gridPos": {"h": 7, "w": 6, "x": 0, "y": 0}
-    },
-    {
-      "type": "stat", "title": "Drifted features", "id": 2,
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "airbnb_drifted_features", "refId": "A"}],
-      "gridPos": {"h": 7, "w": 6, "x": 6, "y": 0}
-    },
-    {
-      "type": "stat", "title": "Prediction drift", "id": 3,
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "airbnb_prediction_drift", "refId": "A"}],
-      "gridPos": {"h": 7, "w": 6, "x": 12, "y": 0}
-    },
-    {
-      "type": "stat", "title": "Monitoring age", "id": 4,
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "time() - airbnb_drift_last_success_timestamp_seconds", "refId": "A"}],
-      "gridPos": {"h": 7, "w": 6, "x": 18, "y": 0}
-    },
-    {
-      "type": "barchart", "title": "Per-feature PSI", "id": 5,
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "airbnb_feature_drift_score", "legendFormat": "{{feature}} ({{kind}})", "refId": "A"}],
-      "gridPos": {"h": 10, "w": 16, "x": 0, "y": 7}
-    },
-    {
-      "type": "table", "title": "Loaded model versions", "id": 6,
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "max without (job, service) (airbnb_loaded_model_info)", "format": "table", "instant": true, "refId": "A"}],
-      "gridPos": {"h": 10, "w": 8, "x": 16, "y": 7}
-    },
-    {
-      "type": "stat", "title": "Production MAE", "id": 7,
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "airbnb_model_quality_mae_dollars{segment=\"overall\",segment_value=\"all\"}", "legendFormat": "v{{model_version}}", "refId": "A"}],
-      "fieldConfig": {"defaults": {"unit": "currencyUSD"}},
-      "gridPos": {"h": 7, "w": 4, "x": 0, "y": 17}
-    },
-    {
-      "type": "stat", "title": "Production RMSE", "id": 8,
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "airbnb_model_quality_rmse_dollars{segment=\"overall\",segment_value=\"all\"}", "legendFormat": "v{{model_version}}", "refId": "A"}],
-      "fieldConfig": {"defaults": {"unit": "currencyUSD"}},
-      "gridPos": {"h": 7, "w": 4, "x": 4, "y": 17}
-    },
-    {
-      "type": "stat", "title": "Mean prediction bias", "id": 9,
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "airbnb_model_quality_mean_bias_dollars{segment=\"overall\",segment_value=\"all\"}", "legendFormat": "v{{model_version}}", "refId": "A"}],
-      "fieldConfig": {"defaults": {"unit": "currencyUSD"}},
-      "gridPos": {"h": 7, "w": 4, "x": 8, "y": 17}
-    },
-    {
-      "type": "stat", "title": "Within $25", "id": 10,
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "airbnb_model_quality_within_25_dollars_ratio{segment=\"overall\",segment_value=\"all\"}", "legendFormat": "v{{model_version}}", "refId": "A"}],
-      "fieldConfig": {"defaults": {"unit": "percentunit"}},
-      "gridPos": {"h": 7, "w": 4, "x": 12, "y": 17}
-    },
-    {
-      "type": "stat", "title": "Within 20%", "id": 11,
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "airbnb_model_quality_within_20_percent_ratio{segment=\"overall\",segment_value=\"all\"}", "legendFormat": "v{{model_version}}", "refId": "A"}],
-      "fieldConfig": {"defaults": {"unit": "percentunit"}},
-      "gridPos": {"h": 7, "w": 4, "x": 16, "y": 17}
-    },
-    {
-      "type": "stat", "title": "Matched outcomes", "id": 12,
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "airbnb_model_quality_samples{segment=\"overall\",segment_value=\"all\"}", "legendFormat": "v{{model_version}}", "refId": "A"}],
-      "gridPos": {"h": 7, "w": 4, "x": 20, "y": 17}
-    },
-    {
-      "type": "timeseries", "title": "Segment MAE", "id": 13,
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "airbnb_model_quality_mae_dollars{segment!=\"overall\"}", "legendFormat": "v{{model_version}} {{segment}}={{segment_value}}", "refId": "A"}],
-      "fieldConfig": {"defaults": {"unit": "currencyUSD"}},
-      "gridPos": {"h": 10, "w": 16, "x": 0, "y": 24}
-    },
-    {
-      "type": "timeseries", "title": "Data quality ratios", "id": 14,
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "title": "Latest completed drift evaluation",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
-        {"expr": "airbnb_data_missing_ratio", "legendFormat": "missing {{feature}}", "refId": "A"},
-        {"expr": "airbnb_data_unseen_category_ratio", "legendFormat": "unseen {{feature}}", "refId": "B"}
+        {
+          "refId": "A",
+          "expr": "1000 * (max(airbnb_drift_last_success_timestamp_seconds > 0))",
+          "legendFormat": "{{pod}}",
+          "instant": true,
+          "format": "time_series"
+        }
       ],
-      "fieldConfig": {"defaults": {"unit": "percentunit"}},
-      "gridPos": {"h": 10, "w": 8, "x": 16, "y": 24}
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsIso",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 1,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Drift monitoring freshness",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - max(airbnb_drift_last_success_timestamp_seconds > 0)",
+          "legendFormat": "{{pod}}",
+          "instant": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Unavailable",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 93600
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "No data means no completed evaluation is available. Values above 26 hours are stale; they do not indicate a healthy current evaluation.",
+      "id": 2,
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "title": "Drift breach (latest completed evaluation)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(airbnb_dataset_drift)",
+          "legendFormat": "{{pod}}",
+          "instant": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Healthy completed evaluation",
+                  "color": "green"
+                },
+                "1": {
+                  "text": "Drift detected",
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "description": "0 healthy completed evaluation; 1 breach. Unavailable is distinct from healthy. Check freshness before interpreting this state.",
+      "id": 3,
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Drifted feature count",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(airbnb_drifted_features)",
+          "legendFormat": "{{pod}}",
+          "instant": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 4,
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Aggregate drift share and configured threshold",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(airbnb_drift_share)",
+          "legendFormat": "drifted feature share",
+          "instant": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "max(airbnb_drift_threshold)",
+          "legendFormat": "dataset share threshold",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "Aggregate is fraction of evaluated features breaching PSI; it is not mean feature PSI.",
+      "id": 5,
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Per-feature PSI and threshold",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (feature, kind) (airbnb_feature_drift_score)",
+          "legendFormat": "{{feature}} {{kind}}",
+          "instant": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "max(airbnb_feature_drift_threshold)",
+          "legendFormat": "PSI threshold",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 6,
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Drift history",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(airbnb_dataset_drift)",
+          "legendFormat": "{{pod}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "Historical scraped completed drift state. Detailed reports remain in S3.",
+      "id": 7,
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Offline holdout MAE",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (role) (airbnb_offline_evaluation_mae)",
+          "legendFormat": "{{role}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "Champion/challenger evaluation holdout. This is not production accuracy.",
+      "id": 8,
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Offline holdout RMSE",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (role) (airbnb_offline_evaluation_rmse)",
+          "legendFormat": "{{role}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 9,
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Offline holdout R\u00b2",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (role) (airbnb_offline_evaluation_r2)",
+          "legendFormat": "{{role}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 10,
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Delayed outcome MAE (unavailable without matched labels)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (model_version) (airbnb_model_quality_mae_dollars{segment=\"overall\",segment_value=\"all\"})",
+          "legendFormat": "{{pod}}",
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "Only matched delayed production outcomes; no data means accuracy unavailable. Offline holdout metrics never fill this panel.",
+      "id": 11,
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Matched delayed outcomes",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (model_version) (airbnb_model_quality_samples{segment=\"overall\",segment_value=\"all\"})",
+          "legendFormat": "{{pod}}",
+          "instant": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 12,
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Training and retraining last outcome",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (dag) (airbnb_pipeline_last_run_success{dag=~\"airbnb_model_training|airbnb_model_retraining\"})",
+          "legendFormat": "{{dag}}",
+          "instant": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "Latest terminal training and drift-triggered retraining DAG outcomes. 1 success; 0 failure. Completed training never implies deployment or approval.",
+      "id": 13,
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Retraining, promotion and verified rollback events (24h)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(increase(airbnb_model_promotions_total[24h]))",
+          "legendFormat": "promotions",
+          "instant": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "max(increase(airbnb_model_rollbacks_total[24h]))",
+          "legendFormat": "verified rollbacks",
+          "instant": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "C",
+          "expr": "max(increase(airbnb_model_retraining_events_total[24h]))",
+          "legendFormat": "retraining triggers"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 14,
+      "gridPos": {
+        "x": 12,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "title": "Last promotion / verified rollback",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1000 * (max(airbnb_model_last_promotion_timestamp_seconds > 0))",
+          "legendFormat": "promotion",
+          "instant": true,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "1000 * (max(airbnb_model_last_rollback_timestamp_seconds > 0))",
+          "legendFormat": "rollback",
+          "instant": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsIso",
+          "noValue": "Unavailable"
+        },
+        "overrides": []
+      },
+      "description": "",
+      "id": 15,
+      "gridPos": {
+        "x": 0,
+        "y": 56,
+        "w": 12,
+        "h": 8
+      }
     }
-  ],
-  "schemaVersion": 39,
-  "tags": ["airbnb", "model", "drift"],
-  "templating": {"list": []},
-  "time": {"from": "now-7d", "to": "now"},
-  "title": "Airbnb Model and Drift Health",
-  "uid": "airbnb-model-drift",
-  "version": 2
+  ]
 }

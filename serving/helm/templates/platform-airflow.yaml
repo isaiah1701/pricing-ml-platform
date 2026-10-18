@@ -62,10 +62,12 @@ data:
   APPROVED_MODEL_STORE: {{ printf "s3://%s/snapshots/approved-models" $airflow.dataBucket | quote }}
   AIRBNB_TRAINING_WORK_DIR: /opt/airflow/training-work
   AIRBNB_TRAINING_CHECKPOINT_DIR: /opt/airflow/training-checkpoints
+  AIRBNB_PROMOTION_STATE_DIR: /opt/airflow/training-checkpoints/promotions
   DRIFT_REFERENCE_PATH: /opt/airflow/work/listing_features.parquet
   DRIFT_PRODUCTION_PATH: /opt/airflow/input/production_features.parquet
   PRODUCTION_EVENTS_PREFIX: production/events
   DRIFT_REPORT_DIR: /opt/airflow/reports
+  AIRBNB_BATCH_METRIC_STATE_DIR: /opt/airflow/monitoring-metrics
   DRIFT_PROMETHEUS_METRICS_PATH: /opt/airflow/monitoring-metrics/drift.prom
   RETRAINING_EVENT_DIR: /opt/airflow/retraining-events
   MODEL_QUALITY_OUTCOMES_PATH: /opt/airflow/input/model_outcomes.parquet

@@ -17,6 +17,8 @@ from evidently import DataDefinition, Dataset, Report
 from evidently.presets import DataDriftPreset
 from prometheus_client import CollectorRegistry, Gauge, generate_latest, push_to_gateway
 
+from monitoring.operational_metrics import persist_registry
+
 LOGGER = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REFERENCE_PATH = PROJECT_ROOT / "data" / "listing_features.parquet"
@@ -78,6 +80,8 @@ class DriftResult(TypedDict):
     drifted_feature_count: int
     monitored_feature_count: int
     drift_share: float
+    drift_threshold: float
+    feature_drift_threshold: float
     prediction_drift: bool
     features: dict[str, FeatureDriftResult]
     data_quality: DataQualityResult
@@ -134,7 +138,9 @@ def _extract_scores(
     return results
 
 
-def write_prometheus_metrics(result: DriftResult, metrics_path: Path) -> None:
+def write_prometheus_metrics(
+    result: DriftResult, metrics_path: Path, *, publish: bool = True
+) -> None:
     """Atomically publish drift results for a Prometheus textfile collector."""
     registry = CollectorRegistry()
     feature_score = Gauge(
@@ -157,6 +163,10 @@ def write_prometheus_metrics(result: DriftResult, metrics_path: Path) -> None:
         "Number of monitored columns with drift.",
         registry=registry,
     ).set(result["drifted_feature_count"])
+    for name, value in (("airbnb_drift_share", result["drift_share"]),
+                        ("airbnb_drift_threshold", result.get("drift_threshold", 0.5)),
+                        ("airbnb_feature_drift_threshold", result.get("feature_drift_threshold", 0.2))):
+        Gauge(name, "Configured drift share or threshold.", registry=registry).set(value)
     Gauge(
         "airbnb_prediction_drift",
         "Whether the prediction distribution drifted.",
@@ -219,6 +229,11 @@ def write_prometheus_metrics(result: DriftResult, metrics_path: Path) -> None:
         temporary_file.write(generate_latest(registry))
     os.replace(temporary_path, metrics_path)
     LOGGER.info("Published drift metrics to %s", metrics_path)
+    if not publish:
+        return
+    if os.getenv("PLATFORM_DATA_BUCKET", "").strip():
+        persist_registry("drift", registry, datetime.fromisoformat(result["timestamp"]).timestamp())
+        return
     pushgateway_url = os.getenv("PROMETHEUS_PUSHGATEWAY_URL", "").strip()
     if pushgateway_url:
         push_to_gateway(pushgateway_url, job="airbnb-drift-monitoring", registry=registry)
@@ -239,6 +254,7 @@ def run_drift_check(
     drift_threshold: float = 0.2,
     dataset_drift_share_threshold: float = 0.5,
     model_version: str = "unknown",
+    publish_metrics: bool = True,
 ) -> DriftResult:
     """Run Evidently drift analysis and persist JSON, HTML, and Prometheus outputs."""
     if production_window_rows < 1:
@@ -363,6 +379,8 @@ def run_drift_check(
         "drifted_feature_count": drifted_count,
         "monitored_feature_count": len(features),
         "drift_share": drift_share,
+        "drift_threshold": dataset_drift_share_threshold,
+        "feature_drift_threshold": drift_threshold,
         "prediction_drift": features[prediction_column]["drifted"],
         "features": features,
         "data_quality": data_quality,
@@ -377,7 +395,7 @@ def run_drift_check(
         encoding="utf-8",
     )
     snapshot.save_html(str(html_path))
-    write_prometheus_metrics(result, resolved_metrics_path)
+    write_prometheus_metrics(result, resolved_metrics_path, publish=publish_metrics)
     LOGGER.info(
         "Drift check completed: %d/%d columns drifted",
         drifted_count,

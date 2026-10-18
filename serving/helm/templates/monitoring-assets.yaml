@@ -13,6 +13,8 @@ data:
 {{ .Files.Get "files/dashboards/infrastructure-service-health.json" | nindent 4 }}
   model-drift-health.json: |-
 {{ .Files.Get "files/dashboards/model-drift-health.json" | nindent 4 }}
+  pipeline-health.json: |-
+{{ .Files.Get "files/dashboards/pipeline-health.json" | nindent 4 }}
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule

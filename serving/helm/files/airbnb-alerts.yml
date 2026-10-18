@@ -1,108 +1,87 @@
 groups:
-  - name: airbnb-ml-observability
-    rules:
-      - alert: AirbnbServingUnavailable
-        expr: absent(airbnb_readiness) or sum(max without (job, service) (airbnb_readiness)) < 1
-        for: 5m
-        labels: {severity: critical, service: airbnb-price-predictor}
-        annotations:
-          summary: No ready Airbnb inference replica is available
-          runbook_url: docs/runbooks/serving-error-rate.md
-      - alert: AirbnbPredictionCapacityExhausted
-        expr: sum(max without (job, service) (rate(airbnb_prediction_rejected_total[5m]))) > 0
-        for: 5m
-        labels: {severity: warning, service: airbnb-price-predictor}
-        annotations:
-          summary: Prediction requests are being rejected by the bounded execution queue
-          runbook_url: docs/runbooks/prediction-latency.md
-      - alert: AirbnbDriftMonitoringStale
-        expr: (time() - airbnb_drift_last_success_timestamp_seconds > 93600) or on() absent(airbnb_drift_last_success_timestamp_seconds)
-        for: 15m
-        labels: {severity: warning, service: airbnb-price-predictor}
-        annotations:
-          summary: Airbnb drift monitoring has not completed in 26 hours
-          runbook_url: docs/runbooks/drift-monitoring-stale.md
-      - alert: AirbnbPredictionEventPersistenceFailing
-        expr: sum(rate(airbnb_prediction_events_total{outcome="failed"}[10m])) > 0
-        for: 10m
-        labels: {severity: critical, service: airbnb-price-predictor}
-        annotations:
-          summary: Prediction events are not reaching the production drift window
-          runbook_url: docs/runbooks/drift-monitoring-stale.md
-      - alert: AirbnbFeatureDriftDetected
-        expr: max by (feature, kind, model_version) (airbnb_feature_drift_score) > 0.2
-        for: 15m
-        labels: {severity: warning, service: airbnb-price-predictor}
-        annotations:
-          summary: Airbnb feature distribution exceeded its PSI threshold
-          runbook_url: docs/runbooks/feature-drift.md
-      - alert: AirbnbPredictionDriftDetected
-        expr: airbnb_prediction_drift == 1
-        for: 15m
-        labels: {severity: critical, service: airbnb-price-predictor}
-        annotations:
-          summary: Airbnb predicted-price distribution is drifting
-          runbook_url: docs/runbooks/prediction-drift.md
-      - alert: AirbnbModelQualityMonitoringStale
-        expr: (time() - airbnb_model_quality_last_success_timestamp_seconds > 93600) or on() absent(airbnb_model_quality_last_success_timestamp_seconds)
-        for: 15m
-        labels: {severity: warning, service: airbnb-price-predictor}
-        annotations:
-          summary: Production model-quality monitoring has not completed in 26 hours
-          runbook_url: docs/runbooks/model-quality.md
-      - alert: AirbnbProductionOutcomesStale
-        expr: (time() - airbnb_model_quality_latest_outcome_timestamp_seconds > 172800) or on() absent(airbnb_model_quality_latest_outcome_timestamp_seconds)
-        for: 30m
-        labels: {severity: warning, service: airbnb-price-predictor}
-        annotations:
-          summary: No recent matched production outcomes are available
-          runbook_url: docs/runbooks/model-quality.md
-      - alert: AirbnbProductionMAEDegraded
-        expr: airbnb_model_quality_mae_degradation_ratio > 1.2 and on(model_version) airbnb_model_quality_samples{segment="overall",segment_value="all"} >= 100
-        for: 30m
-        labels: {severity: critical, service: airbnb-price-predictor}
-        annotations:
-          summary: Production MAE is more than 20 percent above its validated reference
-          runbook_url: docs/runbooks/model-quality.md
-      - alert: AirbnbProductionPredictionBiasHigh
-        expr: abs(airbnb_model_quality_mean_bias_dollars{segment="overall",segment_value="all"}) > 25 and on(model_version) airbnb_model_quality_samples{segment="overall",segment_value="all"} >= 100
-        for: 30m
-        labels: {severity: warning, service: airbnb-price-predictor}
-        annotations:
-          summary: Production predictions have more than 25 dollars of signed mean bias
-          runbook_url: docs/runbooks/model-quality.md
-      - alert: AirbnbOutcomeMatchRatioLow
-        expr: airbnb_model_quality_match_ratio < 0.8
-        for: 30m
-        labels: {severity: warning, service: airbnb-price-predictor}
-        annotations:
-          summary: Fewer than 80 percent of outcome rows are valid prediction matches
-          runbook_url: docs/runbooks/model-quality.md
-      - alert: AirbnbProductionDataQualityDegraded
-        expr: max(airbnb_data_missing_ratio) > 0.05 or max(airbnb_data_unseen_category_ratio) > 0.05 or airbnb_data_quality_valid_ratio < 0.95
-        for: 30m
-        labels: {severity: warning, service: airbnb-price-predictor}
-        annotations:
-          summary: Production data quality exceeded missing or unseen-value thresholds
-          runbook_url: docs/runbooks/data-quality.md
-      - alert: AirbnbProductionDataStale
-        expr: (time() - airbnb_production_data_modified_timestamp_seconds > 93600) or on() absent(airbnb_production_data_modified_timestamp_seconds)
-        for: 15m
-        labels: {severity: warning, service: airbnb-price-predictor}
-        annotations:
-          summary: Production monitoring data has not been refreshed in 26 hours
-          runbook_url: docs/runbooks/data-quality.md
-      - alert: AirbnbServingErrorRateHigh
-        expr: sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint="/predict",status=~"5.."}[5m]))) / clamp_min(sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint="/predict"}[5m]))), 0.001) > 0.05
-        for: 10m
-        labels: {severity: critical, service: airbnb-price-predictor}
-        annotations:
-          summary: Airbnb prediction error rate exceeds 5 percent
-          runbook_url: docs/runbooks/serving-error-rate.md
-      - alert: AirbnbPredictionLatencyP95High
-        expr: histogram_quantile(0.95, sum by (le) (max without (job, service) (rate(airbnb_prediction_latency_seconds_bucket[5m])))) > 0.25
-        for: 10m
-        labels: {severity: warning, service: airbnb-price-predictor}
-        annotations:
-          summary: Airbnb prediction p95 latency exceeds 250 milliseconds
-          runbook_url: docs/runbooks/prediction-latency.md
+- name: airbnb-ml-observability
+  rules:
+  - alert: AirbnbPredictionCapacityExhausted
+    expr: sum(max without (job, service) (rate(airbnb_prediction_rejected_total[5m]))) > 0
+    for: 5m
+    labels:
+      severity: warning
+      service: airbnb-price-predictor
+    annotations:
+      summary: Prediction requests are being rejected by the bounded execution queue
+      runbook_url: docs/runbooks/prediction-latency.md
+  - alert: AirbnbPredictionEventPersistenceFailing
+    expr: sum(rate(airbnb_prediction_events_total{outcome="failed"}[10m])) > 0
+    for: 10m
+    labels:
+      severity: critical
+      service: airbnb-price-predictor
+    annotations:
+      summary: Prediction events are not reaching the production drift window
+      runbook_url: docs/runbooks/drift-monitoring-stale.md
+  - alert: AirbnbModelQualityMonitoringStale
+    expr: (time() - airbnb_model_quality_last_success_timestamp_seconds > 93600) or on() absent(airbnb_model_quality_last_success_timestamp_seconds)
+    for: 15m
+    labels:
+      severity: warning
+      service: airbnb-price-predictor
+    annotations:
+      summary: Production model-quality monitoring has not completed in 26 hours
+      runbook_url: docs/runbooks/model-quality.md
+  - alert: AirbnbProductionOutcomesStale
+    expr: (time() - airbnb_model_quality_latest_outcome_timestamp_seconds > 172800) or on() absent(airbnb_model_quality_latest_outcome_timestamp_seconds)
+    for: 30m
+    labels:
+      severity: warning
+      service: airbnb-price-predictor
+    annotations:
+      summary: No recent matched production outcomes are available
+      runbook_url: docs/runbooks/model-quality.md
+  - alert: AirbnbProductionMAEDegraded
+    expr: airbnb_model_quality_mae_degradation_ratio > 1.2 and on(model_version) airbnb_model_quality_samples{segment="overall",segment_value="all"}
+      >= 100
+    for: 30m
+    labels:
+      severity: critical
+      service: airbnb-price-predictor
+    annotations:
+      summary: Production MAE is more than 20 percent above its validated reference
+      runbook_url: docs/runbooks/model-quality.md
+  - alert: AirbnbProductionPredictionBiasHigh
+    expr: abs(airbnb_model_quality_mean_bias_dollars{segment="overall",segment_value="all"}) > 25 and on(model_version)
+      airbnb_model_quality_samples{segment="overall",segment_value="all"} >= 100
+    for: 30m
+    labels:
+      severity: warning
+      service: airbnb-price-predictor
+    annotations:
+      summary: Production predictions have more than 25 dollars of signed mean bias
+      runbook_url: docs/runbooks/model-quality.md
+  - alert: AirbnbOutcomeMatchRatioLow
+    expr: airbnb_model_quality_match_ratio < 0.8
+    for: 30m
+    labels:
+      severity: warning
+      service: airbnb-price-predictor
+    annotations:
+      summary: Fewer than 80 percent of outcome rows are valid prediction matches
+      runbook_url: docs/runbooks/model-quality.md
+  - alert: AirbnbProductionDataQualityDegraded
+    expr: max(airbnb_data_missing_ratio) > 0.05 or max(airbnb_data_unseen_category_ratio) > 0.05 or airbnb_data_quality_valid_ratio
+      < 0.95
+    for: 30m
+    labels:
+      severity: warning
+      service: airbnb-price-predictor
+    annotations:
+      summary: Production data quality exceeded missing or unseen-value thresholds
+      runbook_url: docs/runbooks/data-quality.md
+  - alert: AirbnbProductionDataStale
+    expr: (time() - airbnb_production_data_modified_timestamp_seconds > 93600) or on() absent(airbnb_production_data_modified_timestamp_seconds)
+    for: 15m
+    labels:
+      severity: warning
+      service: airbnb-price-predictor
+    annotations:
+      summary: Production monitoring data has not been refreshed in 26 hours
+      runbook_url: docs/runbooks/data-quality.md

@@ -1,0 +1,33 @@
+{{- if and .Values.platform.enabled (not .Values.bootstrap.enabled) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mlops-grafana-alerting
+  namespace: monitoring
+  labels:
+    grafana_alert: "1"
+data:
+  mlops-rules.yaml: |-
+{{ .Files.Get "files/grafana-alert-rules.yml" | nindent 4 }}
+  {{- if .Values.platform.grafanaAlerting.notifications.enabled }}
+  mlops-notifications.yaml: |-
+    apiVersion: 1
+    contactPoints:
+      - orgId: 1
+        name: mlops-email
+        receivers:
+          - uid: mlops-email
+            type: email
+            settings:
+              addresses: {{ required "platform.grafanaAlerting.notifications.email is required" .Values.platform.grafanaAlerting.notifications.email | quote }}
+              singleEmail: true
+            disableResolveMessage: false
+    policies:
+      - orgId: 1
+        receiver: mlops-email
+        group_by: [grafana_folder, alertname, service, environment]
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 7d
+  {{- end }}
+{{- end }}

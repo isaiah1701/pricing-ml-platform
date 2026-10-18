@@ -10,6 +10,7 @@ from pathlib import Path
 from airflow.sdk import DAG, dag, task
 
 from monitoring.model_quality import ModelQualityResult, run_model_quality_check
+from monitoring.operational_metrics import pipeline_failure, pipeline_success
 
 LOGGER = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -60,6 +61,8 @@ def calculate_production_quality() -> ModelQualityResult:
     start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
     catchup=False,
     max_active_runs=1,
+    on_success_callback=pipeline_success,
+    on_failure_callback=pipeline_failure,
     tags=["airbnb", "monitoring", "quality", "outcomes"],
 )
 def model_quality_pipeline() -> None:

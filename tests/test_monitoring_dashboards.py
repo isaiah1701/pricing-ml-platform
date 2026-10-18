@@ -39,6 +39,8 @@ def test_misspelled_metric_is_rejected(tmp_path: Path) -> None:
         "serving/app/api.py",
         "monitoring/drift_check.py",
         "monitoring/model_quality.py",
+        "monitoring/operational_metrics.py",
+        "serving/helm/values/bootstrap.yaml",
     ):
         destination = tmp_path / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -81,6 +83,7 @@ def test_dashboard_configmap_and_scrape_label_contract() -> None:
         and item["metadata"]["name"] == "airbnb-mlops-dashboards"
     )
     assert config["metadata"]["labels"]["grafana_dashboard"] == "1"
+    assert len(config["data"]) == 4
     for name, contents in config["data"].items():
         assert json.loads(contents) == json.loads(
             (PROJECT_ROOT / "monitoring/grafana/dashboards" / name).read_text()
@@ -96,3 +99,24 @@ def test_dashboard_configmap_and_scrape_label_contract() -> None:
         ]
         is True
     )
+
+
+def test_dashboard_views_keep_offline_quality_and_unknown_states_explicit() -> None:
+    """Require all four operator views and distinguish unavailable from healthy accuracy."""
+    documents = [
+        json.loads(path.read_text())
+        for path in (PROJECT_ROOT / 'monitoring/grafana/dashboards').glob('*.json')
+    ]
+    assert {document['title'] for document in documents} == {
+        'Model Inference', 'Model Quality & Drift', 'Pipeline Health', 'Kubernetes & Delivery'
+    }
+    quality = next(document for document in documents if document['uid'] == 'airbnb-model-drift')
+    delayed = next(panel for panel in quality['panels'] if panel['title'].startswith('Delayed outcome MAE'))
+    assert 'airbnb_model_quality_mae_dollars' in delayed['targets'][0]['expr']
+    assert 'offline_evaluation' not in delayed['targets'][0]['expr']
+    assert delayed['fieldConfig']['defaults']['noValue'] == 'Unavailable'
+    for panel in quality['panels']:
+        if panel['title'].startswith('Offline holdout'):
+            assert 'airbnb_offline_evaluation_' in panel['targets'][0]['expr']
+    drift = next(panel for panel in quality['panels'] if panel['title'].startswith('Drift breach'))
+    assert 'or vector(0)' not in drift['targets'][0]['expr']

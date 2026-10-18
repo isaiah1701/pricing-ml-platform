@@ -214,6 +214,9 @@ addons:
     values:
       grafana:
         enabled: true
+        envFromSecrets:
+          - name: grafana-smtp
+            optional: true
         resources:
           requests:
             cpu: 25m
@@ -221,6 +224,9 @@ addons:
           limits:
             memory: 384Mi
         sidecar:
+          alerts:
+            enabled: true
+            searchNamespace: ALL
           dashboards:
             enabled: true
             searchNamespace: ALL
@@ -293,6 +299,93 @@ addons:
           limits:
             memory: 256Mi
       kube-state-metrics:
+        metricLabelsAllowlist:
+        - pods=[rollouts-pod-template-hash]
+        rbac:
+          extraRules:
+          - apiGroups:
+            - argoproj.io
+            resources:
+            - rollouts
+            - analysisruns
+            verbs:
+            - get
+            - list
+            - watch
+          - apiGroups:
+            - apiextensions.k8s.io
+            resources:
+            - customresourcedefinitions
+            verbs:
+            - list
+            - watch
+        customResourceState:
+          enabled: true
+          config:
+            kind: CustomResourceStateMetrics
+            spec:
+              resources:
+              - groupVersionKind:
+                  group: argoproj.io
+                  version: v1alpha1
+                  kind: Rollout
+                metricNamePrefix: mlops
+                labelsFromPath:
+                  namespace:
+                  - metadata
+                  - namespace
+                  rollout:
+                  - metadata
+                  - name
+                metrics:
+                - name: rollout_info
+                  help: Current observed rollout phase and desired pod revision.
+                  labelsFromPath:
+                    phase:
+                    - status
+                    - phase
+                    revision:
+                    - status
+                    - currentPodHash
+                  each:
+                    type: Info
+                    info:
+                      path:
+                      - metadata
+                - name: rollout_stable_info
+                  help: Retained stable rollout pod revision.
+                  labelsFromPath:
+                    revision:
+                    - status
+                    - stableRS
+                  each:
+                    type: Info
+                    info:
+                      path:
+                      - metadata
+              - groupVersionKind:
+                  group: argoproj.io
+                  version: v1alpha1
+                  kind: AnalysisRun
+                metricNamePrefix: mlops
+                labelsFromPath:
+                  namespace:
+                  - metadata
+                  - namespace
+                  analysisrun:
+                  - metadata
+                  - name
+                  phase:
+                  - status
+                  - phase
+                metrics:
+                - name: analysis_run_info
+                  help: Current retained canary analysis phase.
+                  each:
+                    type: Info
+                    info:
+                      path:
+                      - metadata
         resources:
           requests:
             cpu: 10m
@@ -320,6 +413,9 @@ addons:
         namespace: monitoring
         additionalLabels:
           release: kube-prometheus-stack
+      extraArgs:
+        - --persistence.file=/data/pushgateway.data
+        - --persistence.interval=1m
       persistentVolume:
         enabled: true
         size: 1Gi

@@ -1,0 +1,39 @@
+groups:
+- name: grafana-offline
+  rules:
+  - alert: InferenceDown
+    expr: ((sum(max without (job, service) (airbnb_readiness)) < bool 1) or on() absent(airbnb_readiness))
+      > 0
+    for: 2m
+  - alert: HighInferenceErrorRate
+    expr: ((sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint="/predict",status=~"5.."}[5m])))
+      / clamp_min(sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint="/predict"}[5m]))),
+      0.001) > 0.05) and on() (sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint="/predict"}[5m])))
+      >= 1)) > 0
+    for: 5m
+  - alert: HighInferenceLatency
+    expr: ((histogram_quantile(0.95, sum by (le) (max without (job, service) (rate(airbnb_prediction_latency_seconds_bucket[5m]))))
+      > 0.25) and on() (sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint="/predict"}[5m])))
+      >= 1)) > 0
+    for: 5m
+  - alert: ModelDriftDetected
+    expr: ((max(airbnb_dataset_drift) > 0) and on() (time() - max(airbnb_drift_last_success_timestamp_seconds)
+      < 93600)) > 0
+    for: 0s
+  - alert: DriftMonitoringStale
+    expr: ((time() - max(airbnb_drift_last_success_timestamp_seconds) > 93600) or
+      on() absent(airbnb_drift_last_success_timestamp_seconds)) > 0
+    for: 15m
+  - alert: AirflowPipelineFailure
+    expr: (max(1 - airbnb_pipeline_last_run_success{dag=~"airbnb_feature_build|airbnb_model_training|airbnb_model_deploy|airbnb_model_retraining|airbnb_drift_monitoring"})
+      > 0) > 0
+    for: 1m
+  - alert: ModelRefreshFailure
+    expr: (sum(max without (job, service) (increase(airbnb_model_refresh_failures_total[10m])))
+      > 0) > 0
+    for: 2m
+  - alert: CanaryRolloutFailure
+    expr: (max(mlops_rollout_info{namespace="airbnb-inference",phase="Degraded"})
+      > 0 or max(mlops_analysis_run_info{namespace="airbnb-inference",phase=~"Failed|Error|Inconclusive"})
+      > 0) > 0
+    for: 1m

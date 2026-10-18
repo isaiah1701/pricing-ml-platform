@@ -13,6 +13,7 @@ import pandas as pd
 from airflow.sdk import DAG, dag, task
 from feast import FeatureStore
 
+from monitoring.operational_metrics import pipeline_failure, pipeline_success
 from training.lineage import (
     load_lineage_manifest,
     publish_dataset_snapshot,
@@ -252,6 +253,8 @@ def verify_ready_features(feature_result: ValidatedFeatureBuildResult) -> None:
     start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
     catchup=False,
     max_active_runs=1,
+    on_success_callback=pipeline_success,
+    on_failure_callback=pipeline_failure,
     tags=["airbnb", "features", "feast"],
 )
 def build_feature_pipeline() -> None:

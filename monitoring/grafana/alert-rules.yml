@@ -1,0 +1,307 @@
+apiVersion: 1
+groups:
+- orgId: 1
+  name: mlops-v1
+  folder: MLOps
+  interval: 1m
+  rules:
+  - uid: mlops-inferencedown
+    title: InferenceDown
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        expr: (sum(max without (job, service) (airbnb_readiness)) < bool 1) or on()
+          absent(airbnb_readiness)
+        instant: true
+        range: false
+        refId: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 0
+        to: 0
+      datasourceUid: __expr__
+      model:
+        type: math
+        expression: $A > 0
+        refId: B
+    noDataState: Alerting
+    execErrState: Error
+    for: 2m
+    annotations:
+      summary: InferenceDown
+      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/inference-unavailable.md
+    labels:
+      severity: critical
+      service: airbnb-price-predictor
+      environment: production
+    isPaused: false
+  - uid: mlops-highinferenceerrorrate
+    title: HighInferenceErrorRate
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        expr: (sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint="/predict",status=~"5.."}[5m])))
+          / clamp_min(sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint="/predict"}[5m]))),
+          0.001) > 0.05) and on() (sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint="/predict"}[5m])))
+          >= 1)
+        instant: true
+        range: false
+        refId: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 0
+        to: 0
+      datasourceUid: __expr__
+      model:
+        type: math
+        expression: $A > 0
+        refId: B
+    noDataState: OK
+    execErrState: Error
+    for: 5m
+    annotations:
+      summary: HighInferenceErrorRate
+      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/serving-error-rate.md
+    labels:
+      severity: critical
+      service: airbnb-price-predictor
+      environment: production
+    isPaused: false
+  - uid: mlops-highinferencelatency
+    title: HighInferenceLatency
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        expr: (histogram_quantile(0.95, sum by (le) (max without (job, service) (rate(airbnb_prediction_latency_seconds_bucket[5m]))))
+          > 0.25) and on() (sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint="/predict"}[5m])))
+          >= 1)
+        instant: true
+        range: false
+        refId: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 0
+        to: 0
+      datasourceUid: __expr__
+      model:
+        type: math
+        expression: $A > 0
+        refId: B
+    noDataState: OK
+    execErrState: Error
+    for: 5m
+    annotations:
+      summary: HighInferenceLatency
+      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/prediction-latency.md
+    labels:
+      severity: warning
+      service: airbnb-price-predictor
+      environment: production
+    isPaused: false
+  - uid: mlops-modeldriftdetected
+    title: ModelDriftDetected
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        expr: (max(airbnb_dataset_drift) > 0) and on() (time() - max(airbnb_drift_last_success_timestamp_seconds)
+          < 93600)
+        instant: true
+        range: false
+        refId: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 0
+        to: 0
+      datasourceUid: __expr__
+      model:
+        type: math
+        expression: $A > 0
+        refId: B
+    noDataState: OK
+    execErrState: Error
+    for: 0s
+    annotations:
+      summary: ModelDriftDetected
+      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/feature-drift.md
+    labels:
+      severity: warning
+      service: airbnb-price-predictor
+      environment: production
+    isPaused: false
+  - uid: mlops-driftmonitoringstale
+    title: DriftMonitoringStale
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        expr: (time() - max(airbnb_drift_last_success_timestamp_seconds) > 93600)
+          or on() absent(airbnb_drift_last_success_timestamp_seconds)
+        instant: true
+        range: false
+        refId: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 0
+        to: 0
+      datasourceUid: __expr__
+      model:
+        type: math
+        expression: $A > 0
+        refId: B
+    noDataState: Alerting
+    execErrState: Error
+    for: 15m
+    annotations:
+      summary: DriftMonitoringStale
+      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/drift-monitoring-stale.md
+    labels:
+      severity: warning
+      service: airbnb-price-predictor
+      environment: production
+    isPaused: false
+  - uid: mlops-airflowpipelinefailure
+    title: AirflowPipelineFailure
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        expr: max(1 - airbnb_pipeline_last_run_success{dag=~"airbnb_feature_build|airbnb_model_training|airbnb_model_deploy|airbnb_model_retraining|airbnb_drift_monitoring"})
+          > 0
+        instant: true
+        range: false
+        refId: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 0
+        to: 0
+      datasourceUid: __expr__
+      model:
+        type: math
+        expression: $A > 0
+        refId: B
+    noDataState: OK
+    execErrState: Error
+    for: 1m
+    annotations:
+      summary: AirflowPipelineFailure
+      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/airflow-pipeline-failure.md
+    labels:
+      severity: warning
+      service: airbnb-price-predictor
+      environment: production
+    isPaused: false
+  - uid: mlops-modelrefreshfailure
+    title: ModelRefreshFailure
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        expr: sum(max without (job, service) (increase(airbnb_model_refresh_failures_total[10m])))
+          > 0
+        instant: true
+        range: false
+        refId: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 0
+        to: 0
+      datasourceUid: __expr__
+      model:
+        type: math
+        expression: $A > 0
+        refId: B
+    noDataState: OK
+    execErrState: Error
+    for: 2m
+    annotations:
+      summary: ModelRefreshFailure
+      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/model-promotion-failure.md
+    labels:
+      severity: critical
+      service: airbnb-price-predictor
+      environment: production
+    isPaused: false
+  - uid: mlops-canaryrolloutfailure
+    title: CanaryRolloutFailure
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        expr: max(mlops_rollout_info{namespace="airbnb-inference",phase="Degraded"})
+          > 0 or max(mlops_analysis_run_info{namespace="airbnb-inference",phase=~"Failed|Error|Inconclusive"})
+          > 0
+        instant: true
+        range: false
+        refId: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 0
+        to: 0
+      datasourceUid: __expr__
+      model:
+        type: math
+        expression: $A > 0
+        refId: B
+    noDataState: OK
+    execErrState: Error
+    for: 1m
+    annotations:
+      summary: CanaryRolloutFailure
+      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/canary-rollout-failure.md
+    labels:
+      severity: warning
+      service: airbnb-price-predictor
+      environment: production
+    isPaused: false
