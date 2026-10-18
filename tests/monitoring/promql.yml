@@ -1,0 +1,32 @@
+rule_files:
+  - dashboard-rules.yml
+evaluation_interval: 1m
+tests:
+  - name: stable and canary scrapes count each pod once
+    interval: 1m
+    input_series:
+      - series: 'airbnb_readiness{pod="one",job="stable",service="inference"}'
+        values: '1+0x10'
+      - series: 'airbnb_readiness{pod="one",job="canary",service="inference-canary"}'
+        values: '1+0x10'
+      - series: 'airbnb_readiness{pod="two",job="stable",service="inference"}'
+        values: '1+0x10'
+      - series: 'airbnb_http_requests_total{pod="one",job="stable",service="inference",endpoint="/predict",status="200"}'
+        values: '0+60x10'
+      - series: 'airbnb_http_requests_total{pod="one",job="canary",service="inference-canary",endpoint="/predict",status="200"}'
+        values: '0+60x10'
+      - series: 'airbnb_http_requests_total{pod="two",job="stable",service="inference",endpoint="/predict",status="200"}'
+        values: '0+120x10'
+      - series: 'airbnb_http_requests_total{pod="two",job="stable",service="inference",endpoint="/health",status="200"}'
+        values: '0+600x10'
+    promql_expr_test:
+      - expr: dashboard_airbnb_service_health_1_A
+        eval_time: 10m
+        exp_samples:
+          - labels: '{__name__="dashboard_airbnb_service_health_1_A"}'
+            value: 2
+      - expr: dashboard_airbnb_service_health_2_A
+        eval_time: 10m
+        exp_samples:
+          - labels: '{__name__="dashboard_airbnb_service_health_2_A"}'
+            value: 3

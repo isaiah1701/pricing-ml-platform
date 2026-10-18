@@ -1,1 +1,295 @@
-{"annotations":{"list":[]},"editable":true,"graphTooltip":1,"panels":[{"type":"stat","title":"Ready replicas","id":1,"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(max without (job, service) (airbnb_readiness))","refId":"A"}],"gridPos":{"h":8,"w":6,"x":0,"y":0}},{"type":"timeseries","title":"Prediction request rate","id":2,"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint=\"/predict\"}[5m])))","legendFormat":"requests/s","refId":"A"}],"gridPos":{"h":8,"w":9,"x":6,"y":0}},{"type":"timeseries","title":"Prediction error rate","id":3,"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint=\"/predict\",status=~\"5..\"}[5m]))) / clamp_min(sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint=\"/predict\"}[5m]))), 0.001)","legendFormat":"error ratio","refId":"A"}],"gridPos":{"h":8,"w":9,"x":15,"y":0}},{"type":"timeseries","title":"Prediction latency percentiles","id":4,"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"histogram_quantile(0.50, sum by (le) (max without (job, service) (rate(airbnb_prediction_latency_seconds_bucket[5m]))))","legendFormat":"p50","refId":"A"},{"expr":"histogram_quantile(0.95, sum by (le) (max without (job, service) (rate(airbnb_prediction_latency_seconds_bucket[5m]))))","legendFormat":"p95","refId":"B"},{"expr":"histogram_quantile(0.99, sum by (le) (max without (job, service) (rate(airbnb_prediction_latency_seconds_bucket[5m]))))","legendFormat":"p99","refId":"C"}],"gridPos":{"h":9,"w":12,"x":0,"y":8}},{"type":"timeseries","title":"CPU and memory","id":5,"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(rate(container_cpu_usage_seconds_total{container=\"inference\"}[5m]))","legendFormat":"CPU cores","refId":"A"},{"expr":"sum(container_memory_working_set_bytes{container=\"inference\"})","legendFormat":"memory bytes","refId":"B"}],"gridPos":{"h":9,"w":12,"x":12,"y":8}}],"schemaVersion":39,"tags":["airbnb","infrastructure","serving"],"templating":{"list":[]},"time":{"from":"now-6h","to":"now"},"title":"Airbnb Infrastructure and Service Health","uid":"airbnb-service-health","version":2}
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Ready replicas",
+      "id": 1,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(max without (job, service) (airbnb_readiness))",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Prediction request rate",
+      "id": 2,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint=\"/predict\"}[5m])))",
+          "legendFormat": "requests/s",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 9,
+        "x": 6,
+        "y": 0
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Prediction error rate",
+      "id": 3,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint=\"/predict\",status=~\"5..\"}[5m]))) / clamp_min(sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint=\"/predict\"}[5m]))), 0.001)",
+          "legendFormat": "error ratio",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 9,
+        "x": 15,
+        "y": 0
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Prediction latency percentiles",
+      "id": 4,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (max without (job, service) (rate(airbnb_prediction_latency_seconds_bucket[5m]))))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (max without (job, service) (rate(airbnb_prediction_latency_seconds_bucket[5m]))))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (max without (job, service) (rate(airbnb_prediction_latency_seconds_bucket[5m]))))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "description": "Queue wait and inference latency; excludes event persistence and final HTTP serialization."
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU and memory",
+      "id": 5,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(max by (namespace, pod, container) (rate(container_cpu_usage_seconds_total{namespace=\"airbnb-inference\",container=\"inference\"}[5m])))",
+          "legendFormat": "CPU cores",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(max by (namespace, pod, container) (container_memory_working_set_bytes{namespace=\"airbnb-inference\",container=\"inference\"}))",
+          "legendFormat": "memory bytes",
+          "refId": "B"
+        }
+      ],
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "description": "Kubernetes inference container CPU cores and memory bytes; separate units on the field axes.",
+      "fieldConfig": {
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU cores"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "cores"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "memory bytes"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Node CPU utilisation",
+      "id": 6,
+      "description": "Node exporter CPU utilisation, including all platform workloads.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
+          "legendFormat": "node {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Node memory utilisation",
+      "id": 7,
+      "description": "Node exporter memory utilisation.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+          "legendFormat": "node {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Platform available replicas",
+      "id": 8,
+      "description": "Kubernetes readiness for Airflow and MLflow deployments. This is not DAG success or an end-to-end registry API probe.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace=~\"airflow|mlflow\",deployment=~\"airflow|mlflow\"})",
+          "legendFormat": "{{deployment}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 25
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Platform container readiness",
+      "id": 9,
+      "description": "Per-container Kubernetes readiness; Airflow components have heartbeat/API probes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "min by (namespace, pod, container) (kube_pod_container_status_ready{namespace=~\"airflow|mlflow\"})",
+          "legendFormat": "{{pod}} / {{container}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 25
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": [
+    "airbnb",
+    "infrastructure",
+    "serving"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "title": "Airbnb Infrastructure and Service Health",
+  "uid": "airbnb-service-health",
+  "version": 3
+}

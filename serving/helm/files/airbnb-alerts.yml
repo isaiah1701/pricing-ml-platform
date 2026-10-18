@@ -2,14 +2,14 @@ groups:
   - name: airbnb-ml-observability
     rules:
       - alert: AirbnbServingUnavailable
-        expr: absent(airbnb_readiness) or sum(airbnb_readiness) < 1
+        expr: absent(airbnb_readiness) or sum(max without (job, service) (airbnb_readiness)) < 1
         for: 5m
         labels: {severity: critical, service: airbnb-price-predictor}
         annotations:
           summary: No ready Airbnb inference replica is available
           runbook_url: docs/runbooks/serving-error-rate.md
       - alert: AirbnbPredictionCapacityExhausted
-        expr: sum(rate(airbnb_prediction_rejected_total[5m])) > 0
+        expr: sum(max without (job, service) (rate(airbnb_prediction_rejected_total[5m]))) > 0
         for: 5m
         labels: {severity: warning, service: airbnb-price-predictor}
         annotations:
@@ -93,14 +93,14 @@ groups:
           summary: Production monitoring data has not been refreshed in 26 hours
           runbook_url: docs/runbooks/data-quality.md
       - alert: AirbnbServingErrorRateHigh
-        expr: sum(rate(airbnb_http_requests_total{endpoint="/predict",status=~"5.."}[5m])) / clamp_min(sum(rate(airbnb_http_requests_total{endpoint="/predict"}[5m])), 0.001) > 0.05
+        expr: sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint="/predict",status=~"5.."}[5m]))) / clamp_min(sum(max without (job, service) (rate(airbnb_http_requests_total{endpoint="/predict"}[5m]))), 0.001) > 0.05
         for: 10m
         labels: {severity: critical, service: airbnb-price-predictor}
         annotations:
           summary: Airbnb prediction error rate exceeds 5 percent
           runbook_url: docs/runbooks/serving-error-rate.md
       - alert: AirbnbPredictionLatencyP95High
-        expr: histogram_quantile(0.95, sum by (le) (rate(airbnb_prediction_latency_seconds_bucket[5m]))) > 0.25
+        expr: histogram_quantile(0.95, sum by (le) (max without (job, service) (rate(airbnb_prediction_latency_seconds_bucket[5m])))) > 0.25
         for: 10m
         labels: {severity: warning, service: airbnb-price-predictor}
         annotations:

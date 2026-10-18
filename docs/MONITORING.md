@@ -156,3 +156,46 @@ aws secretsmanager get-secret-value \
 
 Prometheus and Alertmanager remain private because they do not have an
 application login in this deployment.
+
+## Reproducible dashboard validation
+
+```sh
+.venv/bin/pytest -q tests/test_monitoring_dashboards.py
+.venv/bin/python scripts/validate_monitoring.py --rules-output /tmp/mlops-monitoring/dashboard-rules.yml
+cp tests/monitoring/promql.yml /tmp/mlops-monitoring/promql.yml
+promtool check rules /tmp/mlops-monitoring/dashboard-rules.yml monitoring/prometheus/airbnb-alerts.yml
+promtool test rules /tmp/mlops-monitoring/promql.yml
+```
+
+Use Prometheus/promtool 3.5.0 (CI runs its existing official container). These
+checks verify source/Helm copies, datasource IDs, ConfigMap provisioning labels,
+ServiceMonitor `honorLabels`, application metric declarations, all dashboard
+PromQL syntax and duplicate-scrape behavior using synthetic series. Two scrapes
+of one pod count once; distinct pods still add up. Health traffic is excluded
+from prediction request rate.
+
+The infrastructure dashboard includes node CPU/memory from node exporter,
+namespace-scoped inference container CPU/memory, and Airflow/MLflow deployment
+and container readiness from kube-state-metrics. These Kubernetes panels are
+expected to have no data in local Compose without those exporters. CPU and memory
+use separate units/axes. Prediction latency includes queue wait and inference;
+it excludes event persistence and final HTTP serialization, so it is not exactly
+the end-to-end latency measured by k6.
+
+Airflow DAG-failure metrics are **not currently exported**. Inspect failed runs in
+Airflow; container readiness must not be interpreted as DAG success. MLflow's
+replica readiness panel shows Kubernetes probe health, not an authenticated
+registry read or artifact-download check. No new Airflow exporter or synthetic
+production metric has been introduced.
+
+Drift and model-quality panels consume batch-computed aggregate metrics from
+the existing Airflow jobs/Pushgateway. Grafana does not calculate drift. Missing
+drift or outcome series mean the batch inputs/jobs need investigation; do not
+replace missing data with fake zero drift or fabricated outcomes.
+
+Static validation is separate from live verification. For an approved deployed
+release, port-forward the existing Prometheus service to localhost, evaluate the
+dashboard queries through `/api/v1/query`, check that expected series are present
+and recent, then inspect the three provisioned dashboards in Grafana. Empty query
+results are not proof of healthy services. This refactor's Phase 4 validation was
+offline; no production dashboard sync or live metric verification was performed.

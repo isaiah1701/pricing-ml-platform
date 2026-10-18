@@ -84,6 +84,13 @@ jobs:
       - uses: azure/setup-helm@bf6a7d304bc2fdb57e0331155b7ebf2c504acf0a # v4
       - name: Run all tests
         run: uv run pytest
+      - name: Validate monitoring query syntax and duplicate-scrape behavior
+        run: |
+          uv run python scripts/validate_monitoring.py --rules-output /tmp/mlops-monitoring/dashboard-rules.yml
+          cp tests/monitoring/promql.yml /tmp/mlops-monitoring/promql.yml
+          docker run --rm -v /tmp/mlops-monitoring:/checks -w /checks --entrypoint /bin/promtool prom/prometheus:v3.5.0 check rules dashboard-rules.yml
+          docker run --rm -v /tmp/mlops-monitoring:/checks -w /checks --entrypoint /bin/promtool prom/prometheus:v3.5.0 test rules promql.yml
+          docker run --rm -v "$PWD:/work" --entrypoint /bin/promtool prom/prometheus:v3.5.0 check rules /work/monitoring/prometheus/airbnb-alerts.yml
 
   image:
     needs: changes

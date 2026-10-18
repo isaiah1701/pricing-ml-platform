@@ -24,7 +24,8 @@
 ## Delivery state
 
 - Completed: Phase 0 (`acd0222`); Phase 1 (`e876ff1`); Phase 2 (`8341b87`);
-  Phase 3 (this milestone; `git log --oneline --grep='reproducible local k6'`).
+  Phase 3 (`ecf4ff9`); Phase 4 (this milestone;
+  `git log --oneline --grep='dashboard metric contracts'`).
 - Phase 1 changes: added data/training entry workflows and a reusable approved
   Airflow executor; selective Docker validation; serving-only automatic publishing
   with manual training-image selection; cached builds/dependencies; ECR digests
@@ -73,9 +74,24 @@
   passed. Default 100-VU/5-minute baseline and 130-second burst options inspected.
   Remote-host rejection tested via `k6 inspect -e BASE_URL=https://platf0rm.site`
   (no request issued). Fixture server stopped.
-- Next: Phase 4 — focused dashboard/metric contract checks, offline first.
-- Remaining: Phase 4 dashboards;
-  Phase 5 optional autoscaling proposal only if earlier phases complete.
+- Phase 4 changes: namespace-scoped/deduplicated container CPU/memory with separate
+  units, node utilisation, Airflow/MLflow replica/container readiness. Application
+  alerts deduplicate stable/canary scrapes too. Preserved the two Helm-only serving
+  availability/capacity alerts and added them to the local source alert file;
+  source/chart alert rules now agree. Added metric-declaration/provisioning tests,
+  rule generation and real promtool syntax/synthetic-series CI checks.
+- Phase 4 validation: 22 targeted dashboard/workflow/canary tests passed; final
+  alert-mirror adjustment passed the 3 dashboard tests again. Promtool 3.5.0
+  validated 32 dashboard queries and 15 alerts; duplicate-scrape fixture passed
+  (2 ready pods, 3 prediction requests/s; health traffic excluded). Ruff, actionlint,
+  Helm lint and diff checks passed. Docker daemon unavailable locally; used the
+  official release promtool binary. No production sync/live metrics check.
+- Monitoring limitation: Airflow DAG-failure counters are not exported; inspect
+  Airflow runs directly. MLflow readiness is a Kubernetes probe, not registry API
+  validation. Drift/outcome data still depend on the existing batch jobs.
+- Next: Phase 5 feasibility review; only a tested proposal if substantial changes
+  are needed. No infrastructure application is authorized.
+- Remaining: Phase 5 optional autoscaling proposal.
 - No deployments, AWS mutation, full training or node provisioning authorized.
 - GitOps production applications require operator sync; a merged image PR alone
   does not imply a deployed or verified release.
@@ -89,6 +105,7 @@ cat docs/codex-checkpoint.md
 .venv/bin/pytest tests/test_delivery_workflows.py tests/test_training_dag.py tests/test_feature_build_dag.py
 .venv/bin/pytest -q tests/test_model_recovery.py
 .venv/bin/pytest -q tests/test_k6_contract.py
+.venv/bin/pytest -q tests/test_monitoring_dashboards.py
 k6 run tests/k6/smoke.js  # start the local fixture first; see tests/k6/README.md
 ```
 
