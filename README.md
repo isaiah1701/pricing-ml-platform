@@ -2,27 +2,14 @@
 
 ## Overview
 
-This project delivers a production-oriented machine learning platform for
-predicting prices of New York City Airbnb properties. The prediction service
-helps prospective guests form realistic price expectations earlier in their
-search, reducing decision friction and making it easier to identify properties
-that fit their needs and budget. For hosts and operators, more informed users
-can translate into stronger engagement and improved booking conversion.
+This is a production ML platform for New York City Airbnb price predictions.
+It connects feature management, experiment tracking, governed deployment,
+rollback, and monitoring so teams can move models from research into a reliable
+customer-facing service.
 
-The platform is designed to take the model beyond experimentation and support
-reliable operation at scale. It includes experiment tracking and feature
-management, controlled production deployments, rollback mechanisms, and
-observability across the model and its serving infrastructure. These
-capabilities provide the operational foundation needed to release changes
-safely, identify degradation quickly, and maintain confidence in the
-predictions presented to users.
-
-The engineering decisions documented in this repository are evaluated against
-the outcomes that matter to the business: cost efficiency, service
-reliability, scalability, and the ability for wider engineering and data
-teams to adopt and operate the platform consistently. The documentation that
-follows explains the architecture, delivery model, monitoring approach, and
-governance decisions behind that operating model.
+The business value is safer releases, faster issue detection and recovery, and
+traceable model decisions. For the team, it provides one repeatable workflow
+that data scientists, engineers, and operators can share and run confidently.
 
 ## Platform demo
 
