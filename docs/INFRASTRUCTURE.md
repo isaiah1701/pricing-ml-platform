@@ -1,7 +1,3 @@
-
-
-https://github.com/user-attachments/assets/baff8398-9597-4f9f-891f-46a1b64b5808
-
 # AWS infrastructure
 
 The platform is split into reusable Terraform modules and environment roots.
@@ -102,6 +98,13 @@ impact is observed at the API, model risk is measured against outcomes, and
 infrastructure risk is tied to the servers and workflows supporting both. It
 also keeps monitoring costs predictable by using the existing EKS,
 Prometheus/Grafana, SNS, S3, RDS, and MLflow services.
+
+### Load-testing evidence
+
+The inference service is exercised with the repository's k6 scenarios while
+Grafana tracks throughput, latency, errors, replicas, and node capacity. The
+[load-testing walkthrough](https://github.com/user-attachments/assets/baff8398-9597-4f9f-891f-46a1b64b5808)
+shows the baseline run and autoscaling response.
 
 ## State and deployment
 
