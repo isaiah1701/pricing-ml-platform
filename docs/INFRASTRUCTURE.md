@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/baff8398-9597-4f9f-891f-46a1b64b5808
+
 # AWS infrastructure
 
 The platform is split into reusable Terraform modules and environment roots.
