@@ -5,8 +5,8 @@ image:
   digest: sha256:b08f50e626a540e32d914fc6bbc1d8782658122319871c464ac4e872420fcb31
 trainingImage:
   repository: 655916164714.dkr.ecr.eu-west-2.amazonaws.com/prod-mlops-prod-training
-  tag: sha-a3950f8d904d84aaeb65d9a4260efd44b3456001
-  digest: sha256:051fb90323427dc968abf32b72717ffe54129ace971b59d0345168d249159853
+  tag: sha-1b1ecc2c367f70494a25422fdec17a9a9558d275
+  digest: sha256:ca7e80d875218246a113c6c51ffde423a82d76a75cb5aac0b62a1a16b820fcfe
 ingress:
   enabled: true
   className: traefik
@@ -33,10 +33,10 @@ resources:
     cpu: '1'
     memory: 2Gi
 tolerations:
-- key: workload
-  operator: Equal
-  value: serving
-  effect: NoSchedule
+  - key: workload
+    operator: Equal
+    value: serving
+    effect: NoSchedule
 externalSecret:
   enabled: false
 existingSecret: ''
