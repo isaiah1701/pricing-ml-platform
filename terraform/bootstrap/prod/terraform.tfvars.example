@@ -2,7 +2,7 @@ terraform_trusted_principal_arns = [
   "arn:aws:iam::655916164714:user/isaiahOct26",
 ]
 
-github_repository  = "isaiah1701/prod-mlops-platform"
+github_repository  = "isaiah1701/pricing-ml-platform"
 github_environment = "production"
 
 tags = {
