@@ -13,12 +13,13 @@ that data scientists, engineers, and operators can share and run confidently.
 
 ## Tradeoffs and lessons learned
 
-The dataset limited how far the model could be optimised, so reliable scaling,
-observability, and rollback became more important than marginal model gains.
-Models can drift, fail under load, or become unsafe to operate if their weights,
-features, and serving path are not validated at scale. DevOps practices helped
-make each ML lifecycle stage observable, so failures can be detected, investigated,
-and rolled back safely.
+The dataset limited how far the model could be optimised, so I prioritised
+reliable scaling, observability, and rollback over marginal model gains. Dedicated
+on-demand capacity and highly available services improved resilience, but added
+cost and operational complexity. I learned that models can drift or fail under
+load, making it essential to validate weights, features, and serving behaviour at
+scale. DevOps practices made each ML lifecycle stage observable, recoverable, and
+safe to roll back.
 
 ## Platform demo
 
