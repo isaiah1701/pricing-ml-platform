@@ -58,7 +58,9 @@
 
 ## Current verification — 2026-10-19
 
-- Git: `a5de46adb76eda583eb3ae76e1bc12a38ee58627`; remote `origin/main` agrees.
+- Git: `66e098f` (`docs: record production verification checkpoint`); remote
+  `origin/main` agrees. The deployed GitOps revision is the preceding verified
+  SHA `a5de46adb76eda583eb3ae76e1bc12a38ee58627`.
   Unrelated worktree changes remain preserved: `README.md`, `load-tests/`, and
   `skills/`.
 - EKS `prod-mlops-prod` is ACTIVE in `eu-west-2`, Kubernetes 1.35, with one
