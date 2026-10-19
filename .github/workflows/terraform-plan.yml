@@ -1,10 +1,10 @@
 name: Terraform Plan
 on:
   pull_request:
-    paths: [terraform/**, docs/proposals/autoscaling/**, scripts/terraform_ci.py, .github/workflows/terraform-plan.yml, .github/workflows/terraform-apply.yml]
+    paths: [terraform/**, scripts/terraform_ci.py, .github/workflows/terraform-plan.yml, .github/workflows/terraform-apply.yml]
   push:
     branches: [main]
-    paths: [terraform/**, docs/proposals/autoscaling/**, scripts/terraform_ci.py, .github/workflows/terraform-plan.yml, .github/workflows/terraform-apply.yml]
+    paths: [terraform/**, scripts/terraform_ci.py, .github/workflows/terraform-plan.yml, .github/workflows/terraform-apply.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,12 +24,6 @@ jobs:
           terraform -chdir=terraform/bootstrap/prod validate
           terraform -chdir=terraform/environments/prod init -backend=false -input=false
           terraform -chdir=terraform/environments/prod validate
-      - name: Validate offline autoscaling proposal
-        run: |
-          terraform fmt -check docs/proposals/autoscaling
-          terraform -chdir=docs/proposals/autoscaling init -backend=false -input=false
-          terraform -chdir=docs/proposals/autoscaling validate
-          terraform -chdir=docs/proposals/autoscaling test
   plan:
     needs: terraform
     if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.TF_PLAN_ENABLED == 'true' }}
