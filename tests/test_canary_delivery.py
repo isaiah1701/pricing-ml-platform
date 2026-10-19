@@ -152,6 +152,8 @@ def test_https_uses_cert_manager_secret_and_traefik(
         "platf0rm.site",
         "grafana.platf0rm.site",
         "mlflow.platf0rm.site",
+        "argocd.platf0rm.site",
+        "airflow.platf0rm.site",
     }
     assert certificate["spec"]["issuerRef"]["name"] == issuer["metadata"]["name"]
     assert route["spec"]["tls"]["secretName"] == certificate["spec"]["secretName"]
