@@ -24,12 +24,11 @@ teams to adopt and operate the platform consistently. The documentation that
 follows explains the architecture, delivery model, monitoring approach, and
 governance decisions behind that operating model.
 
-## Platform demo
+## Grafana dashboard demo
 
-See the platform flow from training evidence to a controlled production
-prediction.
+See service health, latency, capacity, drift, and model quality in one view.
 
-https://github.com/user-attachments/assets/5f17e3db-6a54-43fc-8e81-f1077c602f9e
+https://github.com/user-attachments/assets/300feb1d-6ac5-449f-8c45-eb080d920a61
 
 For the end-to-end explanation of how a model moves from training to
 production, including the promotion, rollback, and retraining loop, see the
@@ -49,13 +48,15 @@ statuses.
 
 | Demo | Focus | Business outcome |
 |---|---|---|
+| Platform walkthrough | Training, approval, release, and serving | Shows how a governed model becomes a production prediction. |
 | Grafana dashboards | Service health, latency, capacity, drift, and quality | Gives operators one view for fast, evidence-based action. |
 
-#### Grafana dashboards
+#### Platform walkthrough
 
-See how the dashboards turn service and model signals into operational action.
+See how the platform takes a model from training evidence to a controlled
+production prediction.
 
-https://github.com/user-attachments/assets/300feb1d-6ac5-449f-8c45-eb080d920a61
+https://github.com/user-attachments/assets/5f17e3db-6a54-43fc-8e81-f1077c602f9e
 
 ## 1. Prerequisites — tools and accounts
 
