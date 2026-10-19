@@ -11,16 +11,6 @@ The business value is safer releases, faster issue detection and recovery, and
 traceable model decisions. For the team, it provides one repeatable workflow
 that data scientists, engineers, and operators can share and run confidently.
 
-## Tradeoffs and lessons learned
-
-The dataset limited how far the model could be optimised, so I prioritised
-reliable scaling, observability, and rollback over marginal model gains. Dedicated
-on-demand capacity and highly available services improved resilience, but added
-cost and operational complexity. I learned that models can drift or fail under
-load, making it essential to validate weights, features, and serving behaviour at
-scale. DevOps practices made each ML lifecycle stage observable, recoverable, and
-safe to roll back.
-
 ## Platform demo
 
 See the platform flow from training evidence to a controlled production
@@ -63,6 +53,16 @@ https://github.com/user-attachments/assets/5f17e3db-6a54-43fc-8e81-f1077c602f9e
 | [Architecture](docs/ARCHITECTURE.md) | Model lifecycle, promotion gates, rollback, and prediction API | Releases are controlled and recoverable. |
 | [Infrastructure](docs/INFRASTRUCTURE.md) | AWS rebuild model, node pools, monitoring, and operational controls | The platform can scale and be operated reliably. |
 | [Problem and model evidence](docs/PROBLEM.md) | Business objective, data scope, metrics, experiments, and limitations | Model decisions are measurable and transparent. |
+
+## Tradeoffs and lessons learned
+
+The dataset limited how far the model could be optimised, so I prioritised
+reliable scaling, observability, and rollback over marginal model gains. Dedicated
+on-demand capacity and highly available services improved resilience, but added
+cost and operational complexity. I learned that models can drift or fail under
+load, making it essential to validate weights, features, and serving behaviour at
+scale. DevOps practices made each ML lifecycle stage observable, recoverable, and
+safe to roll back.
 
 ## 1. Prerequisites — tools and accounts
 
