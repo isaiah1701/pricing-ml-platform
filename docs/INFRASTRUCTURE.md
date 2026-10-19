@@ -49,58 +49,38 @@ useful, and that automated decisions remain safe to operate.
 
 ### What is monitored
 
-- **Customer-facing inference:** Prometheus scrapes the serving workload for
-  request volume, latency, error rate, readiness, and model-version labels.
-  These signals answer whether customers can obtain a price prediction within
-  the expected service level and whether a release is safe to keep serving.
-- **The model:** Every prediction is associated with the deployed model
-  version and durable prediction events are retained in Object-Locked S3.
-  Feature and prediction drift checks compare bounded production windows with
-  reference data. When ground-truth outcomes become available, the model
-  quality job calculates MAE, RMSE, R², bias, sample coverage, and business
-  tolerance measures. This distinguishes an available service from a model
-  that is becoming less accurate or less useful.
-- **Training and data pipelines:** Airflow publishes success, failure,
-  freshness, data-quality, drift, and retraining signals. Training runs and
-  candidate models remain linked to MLflow, including metrics, parameters,
-  artifacts, dataset identifiers, and the registered model version. This
-  makes a production regression traceable to a dataset, code version, run,
-  and deployment.
-- **Platform servers and capacity:** The kube-prometheus-stack monitors EKS
-  nodes, Kubernetes workloads, storage, and control-plane-adjacent services.
-  Separate system, serving, and training pools make resource contention
-  visible and protect inference capacity from scheduled training work.
+| Area | Business question | Signals and evidence |
+| --- | --- | --- |
+| Customer-facing inference | Can customers obtain a prediction within the expected service level? | Request volume, latency, errors, readiness, and deployed model version |
+| Model behaviour | Is the model still accurate and useful in the current market? | Feature/prediction drift; delayed MAE, RMSE, R², bias, coverage, and tolerance measures |
+| Training and data pipelines | Can a regression be traced to its source and corrected safely? | Airflow success/failure/freshness, data quality, drift, retraining events, and MLflow lineage |
+| Platform servers and capacity | Is infrastructure reliable, and is serving protected from batch workloads? | EKS node, workload, storage, and capacity metrics across separate system, serving, and training pools |
+
+Every prediction carries its deployed model version. Prediction events are
+retained in Object-Locked S3 so production behaviour can be investigated and
+quality can be measured once ground-truth outcomes arrive.
 
 ### Monitoring components
 
-Prometheus is the metrics and alert-evaluation layer. ServiceMonitor resources
-discover the serving workload, while Airflow monitoring jobs publish durable
-pipeline, drift, and model-quality metrics through the configured metrics
-collector path. Grafana provides the operator and leadership view through
-provisioned dashboards backed by Prometheus. Alertmanager routes actionable
-alerts to the existing SNS notification path so incidents reach the on-call
-team without requiring someone to watch a dashboard.
-
-S3 is the durable evidence layer for prediction events, drift windows,
-quality reports, and recovery metadata. MLflow is the experiment and model
-lineage system: it explains which candidate, data version, and code produced
-a model, while serving metrics show how that model behaves in production.
-RDS retains MLflow and Airflow control-plane metadata. The backup policy
-preserves the distinction between registry metadata and model artifacts.
+| Component | Role | Operational value |
+| --- | --- | --- |
+| Prometheus | Collects metrics and evaluates alert conditions; ServiceMonitor resources discover serving workloads | Detects availability, latency, capacity, pipeline, drift, and quality problems |
+| Grafana | Presents provisioned dashboards backed by Prometheus | Gives operators and leadership a shared view of service health and model risk |
+| Alertmanager + SNS | Routes actionable alerts to the on-call path | Reduces time to detect and respond without requiring dashboard polling |
+| Airflow monitoring jobs | Publishes pipeline, drift, and delayed model-quality results | Shows whether data and scheduled controls are running and producing fresh evidence |
+| MLflow | Stores experiments, parameters, metrics, artifacts, and model lineage | Explains which candidate, dataset, and code produced a deployed model |
+| S3 | Retains prediction events, drift windows, quality reports, and recovery metadata | Provides durable evidence for investigations and rebuilds |
+| RDS | Retains MLflow and Airflow control-plane metadata | Preserves workflow and registry history independently of compute |
+| EKS and kube-prometheus-stack | Monitors nodes, workloads, storage, and platform services | Makes infrastructure degradation and resource contention visible |
 
 ### Business controls and response
 
-The alerting model separates four decisions:
-
-1. **Can customers use the service?** Availability, error, and latency alerts
-   protect the prediction experience and revenue-dependent integrations.
-2. **Is the platform operating reliably?** Pipeline failures, stale checks,
-   capacity pressure, and missing telemetry identify operational risk before
-   it becomes a customer incident.
-3. **Is the data still representative?** Drift and data-quality alerts flag
-   changes in the market or input process that can invalidate predictions.
-4. **Is the model still delivering value?** Delayed outcome metrics measure
-   real production quality and degradation against the configured reference.
+| Decision | Primary indicators | Response |
+| --- | --- | --- |
+| Can customers use the service? | Availability, error rate, latency, and readiness | Protect the prediction experience and investigate customer impact |
+| Is the platform operating reliably? | Pipeline failures, stale checks, capacity pressure, and missing telemetry | Restore the control loop before it becomes an incident |
+| Is the data still representative? | Drift and data-quality thresholds | Investigate input or market changes before trusting new decisions |
+| Is the model still delivering value? | Delayed production quality versus the configured reference | Hold, investigate, retrain, or promote through the governed process |
 
 Alerts are evidence for an operator decision, not an automatic licence to
 promote a model. Canary analysis, immutable image digests, GitOps review, and
