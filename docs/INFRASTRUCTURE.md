@@ -40,6 +40,80 @@ Cluster Autoscaler discovers the underlying Auto Scaling groups through explicit
 Terraform-managed tags. Training work stays off the serving pool. A GPU pool can
 be added later if the model needs it.
 
+## Monitoring and observability architecture
+
+Monitoring is a production control system, not only a set of operational
+dashboards. Its purpose is to give engineering and business owners early,
+actionable evidence that the platform is available, that predictions are
+useful, and that automated decisions remain safe to operate.
+
+### What is monitored
+
+- **Customer-facing inference:** Prometheus scrapes the serving workload for
+  request volume, latency, error rate, readiness, and model-version labels.
+  These signals answer whether customers can obtain a price prediction within
+  the expected service level and whether a release is safe to keep serving.
+- **The model:** Every prediction is associated with the deployed model
+  version and durable prediction events are retained in Object-Locked S3.
+  Feature and prediction drift checks compare bounded production windows with
+  reference data. When ground-truth outcomes become available, the model
+  quality job calculates MAE, RMSE, R², bias, sample coverage, and business
+  tolerance measures. This distinguishes an available service from a model
+  that is becoming less accurate or less useful.
+- **Training and data pipelines:** Airflow publishes success, failure,
+  freshness, data-quality, drift, and retraining signals. Training runs and
+  candidate models remain linked to MLflow, including metrics, parameters,
+  artifacts, dataset identifiers, and the registered model version. This
+  makes a production regression traceable to a dataset, code version, run,
+  and deployment.
+- **Platform servers and capacity:** The kube-prometheus-stack monitors EKS
+  nodes, Kubernetes workloads, storage, and control-plane-adjacent services.
+  Separate system, serving, and training pools make resource contention
+  visible and protect inference capacity from scheduled training work.
+
+### Monitoring components
+
+Prometheus is the metrics and alert-evaluation layer. ServiceMonitor resources
+discover the serving workload, while Airflow monitoring jobs publish durable
+pipeline, drift, and model-quality metrics through the configured metrics
+collector path. Grafana provides the operator and leadership view through
+provisioned dashboards backed by Prometheus. Alertmanager routes actionable
+alerts to the existing SNS notification path so incidents reach the on-call
+team without requiring someone to watch a dashboard.
+
+S3 is the durable evidence layer for prediction events, drift windows,
+quality reports, and recovery metadata. MLflow is the experiment and model
+lineage system: it explains which candidate, data version, and code produced
+a model, while serving metrics show how that model behaves in production.
+RDS retains MLflow and Airflow control-plane metadata. The backup policy
+preserves the distinction between registry metadata and model artifacts.
+
+### Business controls and response
+
+The alerting model separates four decisions:
+
+1. **Can customers use the service?** Availability, error, and latency alerts
+   protect the prediction experience and revenue-dependent integrations.
+2. **Is the platform operating reliably?** Pipeline failures, stale checks,
+   capacity pressure, and missing telemetry identify operational risk before
+   it becomes a customer incident.
+3. **Is the data still representative?** Drift and data-quality alerts flag
+   changes in the market or input process that can invalidate predictions.
+4. **Is the model still delivering value?** Delayed outcome metrics measure
+   real production quality and degradation against the configured reference.
+
+Alerts are evidence for an operator decision, not an automatic licence to
+promote a model. Canary analysis, immutable image digests, GitOps review, and
+the existing model-promotion safeguards remain the change controls. A failed
+or stale monitor therefore causes investigation or a hold, rather than being
+silently treated as a healthy result.
+
+This creates a clear chain from business risk to technical signal: customer
+impact is observed at the API, model risk is measured against outcomes, and
+infrastructure risk is tied to the servers and workflows supporting both. It
+also keeps monitoring costs predictable by using the existing EKS,
+Prometheus/Grafana, SNS, S3, RDS, and MLflow services.
+
 ## State and deployment
 
 The production environment has an empty S3 backend block. Bootstrap the
