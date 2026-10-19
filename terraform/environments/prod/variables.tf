@@ -5,9 +5,9 @@ variable "aws_region" {
 }
 
 variable "cost_optimized" {
-  description = "Single-node learning deployment with single-AZ data services and one NAT gateway. Set false for the dedicated HA topology."
+  description = "Use the single-node learning topology only when explicitly requested; production autoscaling requires the dedicated node pools."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "project_name" {

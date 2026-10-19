@@ -104,13 +104,21 @@ def test_failed_analysis_aborts_without_retargeting_stable_service(
     assert stable["metadata"]["name"] != canary["metadata"]["name"]
 
 
-def test_budget_rollout_uses_one_fixed_replica(
+def test_production_rollout_uses_signal_driven_autoscaling(
     rendered_resources: list[dict[str, Any]],
 ) -> None:
-    """Keep the shared-node learning deployment at one serving replica."""
-    LOGGER.info("Checking fixed serving capacity for the budget deployment")
+    """Scale serving replicas from CPU, latency, and error-rate signals."""
+    LOGGER.info("Checking production serving autoscaling signals")
     rollout = _resource(rendered_resources, "Rollout", "airbnb-inference")
-    assert rollout["spec"]["replicas"] == 1
+    assert "replicas" not in rollout["spec"]
+    scaled_object = _resource(rendered_resources, "ScaledObject", "airbnb-inference")
+    assert scaled_object["spec"]["minReplicaCount"] == 1
+    assert scaled_object["spec"]["maxReplicaCount"] == 6
+    assert {trigger["name"] for trigger in scaled_object["spec"]["triggers"]} == {
+        "high-cpu",
+        "high-p50-latency",
+        "high-error-rate",
+    }
     assert not any(
         resource["kind"] == "HorizontalPodAutoscaler" for resource in rendered_resources
     )

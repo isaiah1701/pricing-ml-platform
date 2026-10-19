@@ -1,0 +1,46 @@
+{{- if and .Values.workload.enabled (not .Values.bootstrap.enabled) .Values.autoscaling.enabled .Values.autoscaling.prometheusSignals.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "airbnb.fullname" . }}
+  labels:
+    {{- include "airbnb.labels" . | nindent 4 }}
+spec:
+  pollingInterval: {{ .Values.autoscaling.prometheusSignals.pollingIntervalSeconds }}
+  cooldownPeriod: {{ .Values.autoscaling.prometheusSignals.cooldownPeriodSeconds }}
+  minReplicaCount: {{ .Values.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.autoscaling.maxReplicas }}
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: {{ .Values.autoscaling.prometheusSignals.scaleDownStabilizationSeconds }}
+  scaleTargetRef:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    name: {{ include "airbnb.fullname" . }}
+  triggers:
+    - type: cpu
+      name: high-cpu
+      metricType: Utilization
+      metadata:
+        value: {{ .Values.autoscaling.targetCPUUtilizationPercentage | quote }}
+    - type: prometheus
+      name: high-p50-latency
+      metadata:
+        serverAddress: {{ .Values.prometheus.address | quote }}
+        threshold: {{ .Values.autoscaling.prometheusSignals.p50LatencyThresholdSeconds | quote }}
+        activationThreshold: {{ .Values.autoscaling.prometheusSignals.p50LatencyThresholdSeconds | quote }}
+        query: >-
+          histogram_quantile(0.50,
+            sum by (le) (rate(airbnb_prediction_latency_seconds_bucket{namespace="{{ .Release.Namespace }}"}[1m])))
+    - type: prometheus
+      name: high-error-rate
+      metadata:
+        serverAddress: {{ .Values.prometheus.address | quote }}
+        threshold: {{ .Values.autoscaling.prometheusSignals.errorRateThreshold | quote }}
+        activationThreshold: {{ .Values.autoscaling.prometheusSignals.errorRateThreshold | quote }}
+        query: >-
+          sum(rate(airbnb_http_requests_total{namespace="{{ .Release.Namespace }}",endpoint="/predict",status=~"5.."}[1m]))
+          / clamp_min(sum(rate(airbnb_http_requests_total{namespace="{{ .Release.Namespace }}",endpoint="/predict"}[1m])), 0.001)
+{{- end }}

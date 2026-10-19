@@ -68,6 +68,13 @@ autoscaling:
   minReplicas: 2
   maxReplicas: 6
   targetCPUUtilizationPercentage: 70
+  prometheusSignals:
+    enabled: false
+    pollingIntervalSeconds: 15
+    cooldownPeriodSeconds: 60
+    scaleDownStabilizationSeconds: 60
+    p50LatencyThresholdSeconds: 0.25
+    errorRateThreshold: 0.05
 
 mlflow:
   trackingUri: http://mlflow.mlflow.svc.cluster.local:5000

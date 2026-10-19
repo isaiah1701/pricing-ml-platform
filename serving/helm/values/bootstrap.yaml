@@ -144,8 +144,47 @@ addons:
           memory: 96Mi
         limits:
           memory: 256Mi
+  keda:
+    enabled: true
+    name: keda
+    namespace: keda
+    syncWave: '-3'
+    chartRepo: https://kedacore.github.io/charts
+    chart: keda
+    chartVersion: 2.17.2
+    values:
+      operator:
+        nodeSelector:
+          workload: system
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+      metricsServer:
+        nodeSelector:
+          workload: system
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+      webhooks:
+        nodeSelector:
+          workload: system
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
   clusterAutoscaler:
-    enabled: false
+    enabled: true
     name: cluster-autoscaler
     namespace: kube-system
     syncWave: '-3'

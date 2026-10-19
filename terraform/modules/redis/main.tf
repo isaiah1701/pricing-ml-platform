@@ -13,9 +13,13 @@ resource "aws_elasticache_subnet_group" "this" {
 }
 
 resource "aws_elasticache_parameter_group" "this" {
-  name        = "${var.replication_group_id}-parameters"
+  name        = "${var.replication_group_id}-parameters-${var.replicas_per_node_group > 0 ? "cluster" : "standalone"}"
   description = "Redis parameters for ${var.replication_group_id}"
   family      = var.parameter_group_family
+
+  lifecycle {
+    create_before_destroy = true
+  }
 
   parameter {
     name  = "cluster-enabled"

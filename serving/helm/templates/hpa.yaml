@@ -1,4 +1,4 @@
-{{- if and .Values.workload.enabled (not .Values.bootstrap.enabled) .Values.autoscaling.enabled }}
+{{- if and .Values.workload.enabled (not .Values.bootstrap.enabled) .Values.autoscaling.enabled (not .Values.autoscaling.prometheusSignals.enabled) }}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
