@@ -1,4 +1,4 @@
-# pricing-ml-platform
+# Pricing ML Platform
 
 ## Overview
 
@@ -24,49 +24,25 @@ teams to adopt and operate the platform consistently. The documentation that
 follows explains the architecture, delivery model, monitoring approach, and
 governance decisions behind that operating model.
 
-- [Model registry and local serving](docs/SERVING.md)
-- [Docker, Helm, Argo CD, secrets, and Terraform definitions](docs/DEPLOYMENT.md)
-- [Infrastructure](docs/INFRASTRUCTURE.md)
-- [AWS production launch](docs/AWS_PRODUCTION_LAUNCH.md)
-- [Monitoring, dashboards, and alerts](docs/MONITORING.md)
-- [Retraining, approval, promotion, and rollback](docs/RETRAINING.md)
-- [Canary delivery, CI/CD, and GitOps](docs/CANARY_DELIVERY.md)
-- [Data validation, immutable snapshots, and lineage](docs/DATA_GOVERNANCE.md)
-- [Model problem and experiment history](docs/PROBLEM.md)
-- AI runbooks: [Launch infrastructure](skills/launch.md) · [Tear down infrastructure](skills/teardown.md)
-- [k6 load test: 100 users](load-tests/README.md)
+## 1. Prerequisites — tools and accounts
 
-## Local disk hygiene
+For local development, install Git, Docker with Compose, Python 3.10+, and
+[uv](https://docs.astral.sh/uv/). For AWS deployment, you also need an AWS
+account with permission to create the required infrastructure, the AWS CLI,
+Terraform, `kubectl`, and Helm. GitHub Actions deployment requires repository
+Actions permissions plus the configured AWS OIDC, ECR, and production
+environment variables.
 
-Terraform providers and repeated container builds are the largest local disk
-consumers. Run Terraform through the cache-aware wrapper so provider binaries
-are shared between root modules:
+## 2. Quick start — deploy from a fresh clone
 
 ```sh
-cd terraform/environments/prod
-../../../scripts/terraform.sh init -backend=false
-```
-
-Remove reproducible repository artifacts after infrastructure validation:
-
-```sh
-scripts/cleanup_local_artifacts.sh
-```
-
-Use the Compose wrapper for local builds and stack updates. After a successful
-update it automatically prunes superseded images belonging to this project:
-
-```sh
+git clone https://github.com/isaiah1701/pricing-ml-platform.git
+cd pricing-ml-platform
+uv sync --extra test --extra orchestration
 scripts/compose.sh up --build --detach
 ```
 
-For manual builds or periodic deep cleanup, remove unused images for this
-Compose project and clear uv's reinstallable package cache:
-
-```sh
-scripts/cleanup_local_artifacts.sh --docker --global-cache
-```
-
-The cleanup intentionally preserves datasets, MLflow runs and models, `.venv`,
-Docker volumes, and every image referenced by a container. If Docker uses a
-non-default context, prefix the command with `DOCKER_CONTEXT=<context>`.
+This starts the local platform. Validate it with `uv run pytest`. Production
+deployment is performed through the Terraform and GitHub Actions workflows
+after AWS credentials, repository variables, and the production environment
+have been configured.
