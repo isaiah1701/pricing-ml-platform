@@ -1,3 +1,11 @@
+
+
+https://github.com/user-attachments/assets/5f17e3db-6a54-43fc-8e81-f1077c602f9e
+
+
+
+https://github.com/user-attachments/assets/300feb1d-6ac5-449f-8c45-eb080d920a61
+
 # Pricing ML Platform
 
 ## Overview
