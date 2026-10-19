@@ -5,8 +5,8 @@ image:
   digest: sha256:b08f50e626a540e32d914fc6bbc1d8782658122319871c464ac4e872420fcb31
 trainingImage:
   repository: 655916164714.dkr.ecr.eu-west-2.amazonaws.com/prod-mlops-prod-training
-  tag: sha-1b1ecc2c367f70494a25422fdec17a9a9558d275
-  digest: sha256:ca7e80d875218246a113c6c51ffde423a82d76a75cb5aac0b62a1a16b820fcfe
+  tag: sha-0df97281bfe350e453e9d9ad18462e6351a88c4b
+  digest: sha256:35ab1ebf8da6005cc68e70292de0c6749680baf167a5c767cb9690787a8d891e
 ingress:
   enabled: true
   className: traefik
