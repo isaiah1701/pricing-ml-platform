@@ -25,6 +25,18 @@ The [prediction API documentation](docs/ARCHITECTURE.md#prediction-api)
 describes the serving endpoints, request contract, responses, and error
 statuses.
 
+### Production endpoints
+
+These hosted endpoints are available when the production environment is running;
+they may be temporarily unavailable during infrastructure changes or when the
+environment is stopped.
+
+- [Prediction API](https://platf0rm.site)
+- [Grafana](https://grafana.platf0rm.site)
+- [Argo CD](https://argocd.platf0rm.site)
+- [Airflow](https://airflow.platf0rm.site)
+- [MLflow](https://mlflow.platf0rm.site)
+
 ## Evidence and demos
 
 | Deployment control | Experiment evidence | Monitoring evidence |
