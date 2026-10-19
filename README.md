@@ -12,6 +12,8 @@ production-shaped local-to-EKS serving path.
 - [Canary delivery, CI/CD, and GitOps](docs/CANARY_DELIVERY.md)
 - [Data validation, immutable snapshots, and lineage](docs/DATA_GOVERNANCE.md)
 - [Model problem and experiment history](docs/PROBLEM.md)
+- AI runbooks: [Launch infrastructure](skills/launch.md) · [Tear down infrastructure](skills/teardown.md)
+- [k6 load test: 100 users](load-tests/README.md)
 
 ## Local disk hygiene
 
