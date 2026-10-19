@@ -200,3 +200,10 @@ change was performed.
   The production GitOps values now reference it; live reconciliation and
   MLflow persistence of the failed run require final verification before
   claiming success.
+- Final live verification found that the current MLflow registry alias is
+  `champion -> 3`, with versions `1`, `2`, and `3` READY. This differs from
+  the earlier checkpoint’s `champion -> 1`; the failed run’s Airflow log said
+  it retained version `1`, but the current tracking server does not contain
+  the logged transient parent/child IDs. No alias was changed by this run or
+  manually during verification; the registry history should be reconciled
+  before any future promotion claim.
