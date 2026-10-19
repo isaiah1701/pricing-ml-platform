@@ -58,6 +58,14 @@ See service health, latency, capacity, drift, and model quality in one view.
 
 https://github.com/user-attachments/assets/5f17e3db-6a54-43fc-8e81-f1077c602f9e
 
+## Design documentation
+
+| Document | Key knowledge | Business value |
+|---|---|---|
+| [Architecture](docs/ARCHITECTURE.md) | Model lifecycle, promotion gates, rollback, and prediction API | Releases are controlled and recoverable. |
+| [Infrastructure](docs/INFRASTRUCTURE.md) | AWS rebuild model, node pools, monitoring, and operational controls | The platform can scale and be operated reliably. |
+| [Problem and model evidence](docs/PROBLEM.md) | Business objective, data scope, metrics, experiments, and limitations | Model decisions are measurable and transparent. |
+
 ## 1. Prerequisites — tools and accounts
 
 For local development, install Git, Docker with Compose, Python 3.10+, and
