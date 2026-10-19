@@ -9,7 +9,7 @@ groups:
       service: airbnb-price-predictor
     annotations:
       summary: Prediction requests are being rejected by the bounded execution queue
-      runbook_url: docs/runbooks/prediction-latency.md
+      runbook_url: docs/ARCHITECTURE.md
   - alert: AirbnbPredictionEventPersistenceFailing
     expr: sum(rate(airbnb_prediction_events_total{outcome="failed"}[10m])) > 0
     for: 10m
@@ -18,7 +18,7 @@ groups:
       service: airbnb-price-predictor
     annotations:
       summary: Prediction events are not reaching the production drift window
-      runbook_url: docs/runbooks/drift-monitoring-stale.md
+      runbook_url: docs/ARCHITECTURE.md
   - alert: AirbnbModelQualityMonitoringStale
     expr: (time() - airbnb_model_quality_last_success_timestamp_seconds > 93600) or on() absent(airbnb_model_quality_last_success_timestamp_seconds)
     for: 15m
@@ -27,7 +27,7 @@ groups:
       service: airbnb-price-predictor
     annotations:
       summary: Production model-quality monitoring has not completed in 26 hours
-      runbook_url: docs/runbooks/model-quality.md
+      runbook_url: docs/ARCHITECTURE.md
   - alert: AirbnbProductionOutcomesStale
     expr: (time() - airbnb_model_quality_latest_outcome_timestamp_seconds > 172800) or on() absent(airbnb_model_quality_latest_outcome_timestamp_seconds)
     for: 30m
@@ -36,7 +36,7 @@ groups:
       service: airbnb-price-predictor
     annotations:
       summary: No recent matched production outcomes are available
-      runbook_url: docs/runbooks/model-quality.md
+      runbook_url: docs/ARCHITECTURE.md
   - alert: AirbnbProductionMAEDegraded
     expr: airbnb_model_quality_mae_degradation_ratio > 1.2 and on(model_version) airbnb_model_quality_samples{segment="overall",segment_value="all"}
       >= 100
@@ -46,7 +46,7 @@ groups:
       service: airbnb-price-predictor
     annotations:
       summary: Production MAE is more than 20 percent above its validated reference
-      runbook_url: docs/runbooks/model-quality.md
+      runbook_url: docs/ARCHITECTURE.md
   - alert: AirbnbProductionPredictionBiasHigh
     expr: abs(airbnb_model_quality_mean_bias_dollars{segment="overall",segment_value="all"}) > 25 and on(model_version)
       airbnb_model_quality_samples{segment="overall",segment_value="all"} >= 100
@@ -56,7 +56,7 @@ groups:
       service: airbnb-price-predictor
     annotations:
       summary: Production predictions have more than 25 dollars of signed mean bias
-      runbook_url: docs/runbooks/model-quality.md
+      runbook_url: docs/ARCHITECTURE.md
   - alert: AirbnbOutcomeMatchRatioLow
     expr: airbnb_model_quality_match_ratio < 0.8
     for: 30m
@@ -65,7 +65,7 @@ groups:
       service: airbnb-price-predictor
     annotations:
       summary: Fewer than 80 percent of outcome rows are valid prediction matches
-      runbook_url: docs/runbooks/model-quality.md
+      runbook_url: docs/ARCHITECTURE.md
   - alert: AirbnbProductionDataQualityDegraded
     expr: max(airbnb_data_missing_ratio) > 0.05 or max(airbnb_data_unseen_category_ratio) > 0.05 or airbnb_data_quality_valid_ratio
       < 0.95
@@ -75,7 +75,7 @@ groups:
       service: airbnb-price-predictor
     annotations:
       summary: Production data quality exceeded missing or unseen-value thresholds
-      runbook_url: docs/runbooks/data-quality.md
+      runbook_url: docs/ARCHITECTURE.md
   - alert: AirbnbProductionDataStale
     expr: (time() - airbnb_production_data_modified_timestamp_seconds > 93600) or on() absent(airbnb_production_data_modified_timestamp_seconds)
     for: 15m
@@ -84,4 +84,4 @@ groups:
       service: airbnb-price-predictor
     annotations:
       summary: Production monitoring data has not been refreshed in 26 hours
-      runbook_url: docs/runbooks/data-quality.md
+      runbook_url: docs/ARCHITECTURE.md

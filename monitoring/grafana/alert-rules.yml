@@ -36,7 +36,7 @@ groups:
     for: 2m
     annotations:
       summary: InferenceDown
-      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/inference-unavailable.md
+      runbook_url: https://github.com/isaiah1701/pricing-ml-platform/blob/main/docs/ARCHITECTURE.md
     labels:
       severity: critical
       service: airbnb-price-predictor
@@ -75,7 +75,7 @@ groups:
     for: 5m
     annotations:
       summary: HighInferenceErrorRate
-      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/serving-error-rate.md
+      runbook_url: https://github.com/isaiah1701/pricing-ml-platform/blob/main/docs/ARCHITECTURE.md
     labels:
       severity: critical
       service: airbnb-price-predictor
@@ -113,7 +113,7 @@ groups:
     for: 5m
     annotations:
       summary: HighInferenceLatency
-      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/prediction-latency.md
+      runbook_url: https://github.com/isaiah1701/pricing-ml-platform/blob/main/docs/ARCHITECTURE.md
     labels:
       severity: warning
       service: airbnb-price-predictor
@@ -150,7 +150,7 @@ groups:
     for: 0s
     annotations:
       summary: ModelDriftDetected
-      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/feature-drift.md
+      runbook_url: https://github.com/isaiah1701/pricing-ml-platform/blob/main/docs/ARCHITECTURE.md
     labels:
       severity: warning
       service: airbnb-price-predictor
@@ -187,7 +187,7 @@ groups:
     for: 15m
     annotations:
       summary: DriftMonitoringStale
-      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/drift-monitoring-stale.md
+      runbook_url: https://github.com/isaiah1701/pricing-ml-platform/blob/main/docs/ARCHITECTURE.md
     labels:
       severity: warning
       service: airbnb-price-predictor
@@ -224,7 +224,7 @@ groups:
     for: 1m
     annotations:
       summary: AirflowPipelineFailure
-      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/airflow-pipeline-failure.md
+      runbook_url: https://github.com/isaiah1701/pricing-ml-platform/blob/main/docs/ARCHITECTURE.md
     labels:
       severity: warning
       service: airbnb-price-predictor
@@ -261,7 +261,7 @@ groups:
     for: 2m
     annotations:
       summary: ModelRefreshFailure
-      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/model-promotion-failure.md
+      runbook_url: https://github.com/isaiah1701/pricing-ml-platform/blob/main/docs/ARCHITECTURE.md
     labels:
       severity: critical
       service: airbnb-price-predictor
@@ -300,7 +300,7 @@ groups:
     for: 1m
     annotations:
       summary: CanaryRolloutFailure
-      runbook_url: https://github.com/isaiah1701/prod-mlops-platform/blob/main/docs/runbooks/canary-rollout-failure.md
+      runbook_url: https://github.com/isaiah1701/pricing-ml-platform/blob/main/docs/ARCHITECTURE.md
     labels:
       severity: warning
       service: airbnb-price-predictor
