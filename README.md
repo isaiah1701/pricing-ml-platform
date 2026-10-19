@@ -1,11 +1,3 @@
-
-
-https://github.com/user-attachments/assets/5f17e3db-6a54-43fc-8e81-f1077c602f9e
-
-
-
-https://github.com/user-attachments/assets/300feb1d-6ac5-449f-8c45-eb080d920a61
-
 # Pricing ML Platform
 
 ## Overview
@@ -31,6 +23,39 @@ reliability, scalability, and the ability for wider engineering and data
 teams to adopt and operate the platform consistently. The documentation that
 follows explains the architecture, delivery model, monitoring approach, and
 governance decisions behind that operating model.
+
+## Platform demo
+
+See the platform flow from training evidence to a controlled production
+prediction.
+
+https://github.com/user-attachments/assets/5f17e3db-6a54-43fc-8e81-f1077c602f9e
+
+For the end-to-end explanation of how a model moves from training to
+production, including the promotion, rollback, and retraining loop, see the
+[model lifecycle section](docs/ARCHITECTURE.md#model-lifecycle-training-to-production).
+The [prediction API documentation](docs/ARCHITECTURE.md#prediction-api)
+describes the serving endpoints, request contract, responses, and error
+statuses.
+
+## Evidence and demos
+
+| Deployment control | Experiment evidence | Monitoring evidence |
+|---|---|---|
+| ![Argo CD shows healthy and synced platform applications](media/MLArgoCD.png) | ![MLflow CatBoost run with metrics and registered model version](media/MLRunScreenshot.png) | ![Airflow drift-monitoring runs completing successfully](media/airflowRuns.png) |
+| Healthy, synced applications make releases safer and recovery faster. | Recorded metrics, lineage, and versioning make model decisions auditable. | Successful scheduled checks surface issues before they affect users. |
+
+### Video demos
+
+| Demo | Focus | Business outcome |
+|---|---|---|
+| Grafana dashboards | Service health, latency, capacity, drift, and quality | Gives operators one view for fast, evidence-based action. |
+
+#### Grafana dashboards
+
+See how the dashboards turn service and model signals into operational action.
+
+https://github.com/user-attachments/assets/300feb1d-6ac5-449f-8c45-eb080d920a61
 
 ## 1. Prerequisites — tools and accounts
 

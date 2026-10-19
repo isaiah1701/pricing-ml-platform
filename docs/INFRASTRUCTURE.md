@@ -73,6 +73,11 @@ quality can be measured once ground-truth outcomes arrive.
 | RDS | Retains MLflow and Airflow control-plane metadata | Preserves workflow and registry history independently of compute |
 | EKS and kube-prometheus-stack | Monitors nodes, workloads, storage, and platform services | Makes infrastructure degradation and resource contention visible |
 
+![Airflow drift-monitoring runs completing successfully](../media/airflowRuns.png)
+
+The scheduled run history gives the team simple evidence that monitoring is
+fresh and working, rather than relying on a dashboard alone.
+
 ### Business controls and response
 
 | Decision | Primary indicators | Response |
@@ -95,6 +100,11 @@ also keeps monitoring costs predictable by using the existing EKS,
 Prometheus/Grafana, SNS, S3, RDS, and MLflow services.
 
 ## State and deployment
+
+![Argo CD showing healthy and synced platform applications](../media/MLArgoCD.png)
+
+This deployment view gives operators a fast answer to the key release question:
+which platform services are live, healthy, and aligned with the approved state.
 
 The production environment has an empty S3 backend block. Bootstrap the
 encrypted state bucket once, then use native S3 lock files without hard-coding
