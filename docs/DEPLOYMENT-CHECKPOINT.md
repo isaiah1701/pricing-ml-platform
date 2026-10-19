@@ -120,3 +120,60 @@ the application change through the normal reviewed Git/CI path before syncing.
 Do not patch the Rollout, weaken minimum-request or failure conditions, run
 production load merely to force approval, change `champion`, or delete the
 failed AnalysisRun as a workaround.
+
+## Final canary promotion and access verification — 2026-10-19
+
+- Finalisation was performed against GitOps revision
+  `f1dd56d5cab50695d44aeb0d0e8b00c654886ef7`; unrelated worktree changes
+  remain preserved.
+- The existing rollout policy was retained unchanged: each analysis measures a
+  two-minute Prometheus window and requires at least 20 canary requests in that
+  window, with three consecutive measurements. Controlled requests used the
+  existing `load-tests/predict.js` through `https://platf0rm.site`; no metrics
+  were written or thresholds changed.
+- Inference promotion PASSED. AnalysisRuns at 5%, 25%, and 50% each completed
+  three successful measurements with zero observed 5xx ratio and p95 latency
+  below 250 ms. The rollout is `Healthy`, stable/current ReplicaSet is
+  `547dccd8d7`, and its sole Ready pod runs the intended image digest
+  `sha256:b08f50e626a540e32d914fc6bbc1d8782658122319871c464ac4e872420fcb31`.
+  Earlier failed AnalysisRuns remain retained history and are not active.
+- Live `https://platf0rm.site/ready` reports model `airbnb-price-predictor`,
+  alias `champion`, version `1`; a live `/predict` returned HTTP 200 with
+  model version `1` and a prediction ID.
+- `airbnb-inference`, `airbnb-platform`, and `prod-mlops-bootstrap` are all
+  Synced/Healthy. The final bootstrap sync is complete at the revision above.
+
+### Login access (secret-safe procedures)
+
+Argo CD:
+
+- URL: `https://argocd.platf0rm.site`
+- Existing local administrator username: `admin`.
+- CLI login, retrieving the existing password into a shell variable without
+  printing it:
+
+```sh
+ARGOCD_PASSWORD="$(kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath='{.data.password}' | base64 -d)"
+argocd login argocd.platf0rm.site --username admin \
+  --password "$ARGOCD_PASSWORD" --grpc-web
+unset ARGOCD_PASSWORD
+```
+
+Airflow:
+
+- URL: `https://airflow.platf0rm.site`
+- Retained administrator username: `admin`.
+- The password is stored in the existing `airflow-runtime` Secret under
+  `AIRFLOW_ADMIN_PASSWORD`; retrieve it only into a local shell variable and
+  never paste its value into chat, logs, or Git:
+
+```sh
+AIRFLOW_PASSWORD="$(kubectl -n airflow get secret airflow-runtime \
+  -o jsonpath='{.data.AIRFLOW_ADMIN_PASSWORD}' | base64 -d)"
+```
+
+Use `$AIRFLOW_PASSWORD` locally for the Airflow web login, then run
+`unset AIRFLOW_PASSWORD`. The existing credentials were verified through
+Airflow's `/auth/token` endpoint with HTTP 201; no password reset or account
+change was performed.
