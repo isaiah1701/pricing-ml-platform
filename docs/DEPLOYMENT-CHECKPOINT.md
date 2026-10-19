@@ -177,3 +177,26 @@ Use `$AIRFLOW_PASSWORD` locally for the Airflow web login, then run
 `unset AIRFLOW_PASSWORD`. The existing credentials were verified through
 Airflow's `/auth/token` endpoint with HTTP 201; no password reset or account
 change was performed.
+
+## MLflow metric logging verification — 2026-10-19
+
+- Source fix committed and pushed in `a3950f8`; focused tests passed (`19 passed`)
+  before the follow-up runtime promotion. The fix uses the supported singular
+  MLflow client logging methods for parent summary metrics and parameters.
+- The single authorised training execution was
+  `mlflow-metrics-20261019T064249Z`. Dataset validation, feature retrieval,
+  model fitting, evaluation, child-run logging, artifact reload verification,
+  and candidate registration completed. The candidate metrics were MAE
+  `54.673881424404705`, RMSE `176.66087485742614`, and R²
+  `0.22047396503985306`; dataset SHA-256 was
+  `0e0aa1a94f298abed85f6edbe7986e7fd975a1f4b836418533c1973327dd68ff`.
+- The DAG terminal state was `failed` only at parent-summary bookkeeping:
+  the first implementation called unsupported `MlflowClient.log_metrics`.
+  No second training run was started. The run’s task logs showed child run
+  `ecdd69b1763d4b139b18b10cf1e248ab` and registration of model version `2`,
+  while the existing champion remained version `1`.
+- The corrected training runtime was published as digest
+  `sha256:051fb90323427dc968abf32b72717ffe54129ace971b59d0345168d249159853`.
+  The production GitOps values now reference it; live reconciliation and
+  MLflow persistence of the failed run require final verification before
+  claiming success.
