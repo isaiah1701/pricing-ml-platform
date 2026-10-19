@@ -159,7 +159,7 @@ def test_plan_captures_provenance_without_exporting_sensitive_values(
         "TF_STATE_BUCKET": "existing",
         "TF_STATE_KEY": "prod/state",
         "TF_STATE_REGION": "eu-west-2",
-        "TF_PROD_TFVARS_JSON": '{"cost_optimized":true,"secret_test":"never-log-this"}',
+            "TF_PROD_TFVARS_JSON": '{"cost_optimized":false,"secret_test":"never-log-this"}',
         "GITHUB_REPOSITORY": "isaiah1701/prod-mlops-platform",
         "GITHUB_SHA": SHA,
         "GITHUB_RUN_ID": "123",

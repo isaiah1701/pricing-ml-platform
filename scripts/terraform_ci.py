@@ -162,11 +162,11 @@ def execute(operation: str, directory: Path) -> None:
             ) from exc
         if (
             not isinstance(values, dict)
-            or values.get("cost_optimized") is not True
+            or values.get("cost_optimized") is not False
             or values.get("aws_region", "eu-west-2") != "eu-west-2"
         ):
             raise ValueError(
-                "Production CI requires explicit inputs with cost_optimized=true"
+                "Production CI requires explicit eu-west-2 inputs with dedicated node pools"
             )
         _private_write(inputs, json.dumps(values))
     backend_file = runtime / "backend.json"

@@ -85,7 +85,11 @@ jobs:
 
   deploy:
     needs: manifests
-    if: ${{ inputs.deploy && github.ref == 'refs/heads/main' && vars.K8S_DEPLOY_ENABLED == 'true' }}
+    # Pushes to main deploy after manifest validation when the repository-level
+    # production deployment switch is enabled. Manual dispatch remains explicit
+    # through the deploy input, and the production environment can still require
+    # an approval before this job runs.
+    if: ${{ (inputs.deploy || github.event_name == 'push') && github.ref == 'refs/heads/main' && vars.K8S_DEPLOY_ENABLED == 'true' }}
     environment: production
     runs-on: ${{ vars.EKS_RUNNER_LABEL || 'ubuntu-24.04' }}
     timeout-minutes: 30
