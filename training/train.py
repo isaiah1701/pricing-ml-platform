@@ -440,6 +440,63 @@ def update_training_attempt(
         LOGGER.info("Training attempt %s finished with outcome %s", run_id, outcome)
 
 
+def record_training_attempt_summary(
+    tracking_uri: str,
+    run_id: str,
+    *,
+    candidate_count: int,
+    winning_model_name: str,
+    winning_metrics: dict[str, float],
+    dataset_sha256: str,
+    registered_model_name: str,
+    registered_model_version: str,
+    winning_child_run_id: str,
+) -> None:
+    """Persist the completed training summary on the parent MLflow run."""
+    if candidate_count < 1:
+        LOGGER.error("Training attempt summary has no evaluated candidates")
+        raise ValueError("candidate_count must be positive")
+    required_metrics = {"mae", "rmse", "r2"}
+    if not required_metrics.issubset(winning_metrics):
+        LOGGER.error("Training attempt summary is missing winning metrics")
+        raise ValueError("winning_metrics must include mae, rmse, and r2")
+    client = MlflowClient(tracking_uri=tracking_uri)
+    client.log_metrics(
+        run_id,
+        {
+            "winning_mae": float(winning_metrics["mae"]),
+            "winning_rmse": float(winning_metrics["rmse"]),
+            "winning_r2": float(winning_metrics["r2"]),
+        },
+    )
+    client.log_params(
+        run_id,
+        {
+            "candidate_count": candidate_count,
+            "winning_model_name": winning_model_name,
+            "dataset_sha256": dataset_sha256,
+            "registered_model_name": registered_model_name,
+            "registered_model_version": registered_model_version,
+            "winning_child_run_id": winning_child_run_id,
+        },
+    )
+    client.set_tags(
+        run_id,
+        {
+            "winning_model_name": winning_model_name,
+            "dataset_sha256": dataset_sha256,
+            "registered_model_name": registered_model_name,
+            "registered_model_version": registered_model_version,
+            "winning_child_run_id": winning_child_run_id,
+        },
+    )
+    LOGGER.info(
+        "Recorded training attempt %s summary for child run %s",
+        run_id,
+        winning_child_run_id,
+    )
+
+
 def _log_lineage_manifest(
     lineage_manifest_path: str | Path | None,
     dataset_version: str,
@@ -569,6 +626,7 @@ def log_model_run(
     baseline: bool = False,
     lineage_manifest_path: str | Path | None = None,
     training_attempt_id: str | None = None,
+    training_duration_seconds: float | None = None,
 ) -> dict[str, object]:
     """Log a fitted model and provenance, then verify artifact reload."""
     from training.provenance import sha256_directory
@@ -594,6 +652,12 @@ def log_model_run(
             }
         )
         mlflow.log_metrics(metrics)
+        if training_duration_seconds is not None:
+            if training_duration_seconds < 0:
+                LOGGER.error("Model training duration cannot be negative")
+                raise ValueError("training_duration_seconds must be non-negative")
+            mlflow.log_metric("training_duration_seconds", training_duration_seconds)
+            mlflow.log_param("training_duration_seconds", training_duration_seconds)
         code_provenance = _log_code_provenance()
         lineage_id = _log_lineage_manifest(lineage_manifest_path, dataset_version)
         sample = x_train.iloc[: min(3, len(x_train))]

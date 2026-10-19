@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import pickle
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TypedDict
@@ -41,6 +42,7 @@ from training.train import (
     load_features_from_feast,
     load_labels,
     log_model_run,
+    record_training_attempt_summary,
     train_baseline,
     update_training_attempt,
 )
@@ -106,6 +108,8 @@ class TrainingResult(TypedDict):
     lineage_id: str
     lineage_manifest_path: str
     training_attempt_id: str
+    baseline_training_duration_seconds: float
+    candidate_training_duration_seconds: float
 
 
 class EvaluationResult(TrainingResult):
@@ -122,6 +126,9 @@ class LoggedCandidate(TypedDict):
     run_id: str
     model_uri: str
     mae: float
+    rmse: float
+    r2: float
+    model_name: str
     artifact_reload_verified: bool
     training_attempt_id: str
     release_bundle_id: str
@@ -279,9 +286,13 @@ def train_models(retrieval: RetrievalResult) -> TrainingResult:
         test_size=TEST_SIZE,
         random_state=RANDOM_STATE,
     )
+    baseline_started = time.perf_counter()
     baseline = train_baseline(y_train)
+    baseline_duration = time.perf_counter() - baseline_started
     candidate = CatBoostPriceEnsembleRegressor(tuple(retrieved["feature_names"]))
+    candidate_started = time.perf_counter()
     candidate.fit(x_train, y_train)
+    candidate_duration = time.perf_counter() - candidate_started
     artifact_path = WORK_DIR / "trained.pkl"
     _write_pickle(
         artifact_path,
@@ -297,7 +308,12 @@ def train_models(retrieval: RetrievalResult) -> TrainingResult:
     update_training_attempt(
         MLFLOW_TRACKING_URI, retrieval["training_attempt_id"], "models_fitted"
     )
-    return {**retrieval, "artifact_path": str(artifact_path)}
+    return {
+        **retrieval,
+        "artifact_path": str(artifact_path),
+        "baseline_training_duration_seconds": baseline_duration,
+        "candidate_training_duration_seconds": candidate_duration,
+    }
 
 
 @task(retries=0)
@@ -368,6 +384,7 @@ def log_models_to_mlflow(evaluation: EvaluationResult) -> LoggedCandidate:
         baseline=True,
         lineage_manifest_path=evaluation["lineage_manifest_path"],
         training_attempt_id=evaluation["training_attempt_id"],
+        training_duration_seconds=evaluation["baseline_training_duration_seconds"],
     )
     candidate = trained["candidate"]
     publish_offline_evaluation("challenger", evaluation["candidate_metrics"])
@@ -392,6 +409,7 @@ def log_models_to_mlflow(evaluation: EvaluationResult) -> LoggedCandidate:
         evaluation_report={**common_report, "model_role": "candidate"},
         lineage_manifest_path=evaluation["lineage_manifest_path"],
         training_attempt_id=evaluation["training_attempt_id"],
+        training_duration_seconds=evaluation["candidate_training_duration_seconds"],
     )
     update_training_attempt(
         MLFLOW_TRACKING_URI, evaluation["training_attempt_id"], "models_logged"
@@ -400,6 +418,9 @@ def log_models_to_mlflow(evaluation: EvaluationResult) -> LoggedCandidate:
         "run_id": str(report["run_id"]),
         "model_uri": str(report["model_uri"]),
         "mae": evaluation["candidate_metrics"]["mae"],
+        "rmse": evaluation["candidate_metrics"]["rmse"],
+        "r2": evaluation["candidate_metrics"]["r2"],
+        "model_name": "catboost_price_ensemble_candidate",
         "artifact_reload_verified": bool(report["artifact_reload_verified"]),
         "training_attempt_id": evaluation["training_attempt_id"],
         "release_bundle_id": str(report["release_bundle_id"]),
@@ -469,6 +490,21 @@ def conditional_registration(candidate: LoggedCandidate) -> dict[str, str]:
             "Candidate registered; existing champion %s retained until approved ML Deploy",
             current_champion.version,
         )
+    record_training_attempt_summary(
+        MLFLOW_TRACKING_URI,
+        candidate["training_attempt_id"],
+        candidate_count=2,
+        winning_model_name=candidate["model_name"],
+        winning_metrics={
+            "mae": candidate["mae"],
+            "rmse": candidate["rmse"],
+            "r2": candidate["r2"],
+        },
+        dataset_sha256=candidate["dataset_sha256"],
+        registered_model_name=REGISTERED_MODEL_NAME,
+        registered_model_version=str(version.version),
+        winning_child_run_id=candidate["run_id"],
+    )
     update_training_attempt(
         MLFLOW_TRACKING_URI,
         candidate["training_attempt_id"],

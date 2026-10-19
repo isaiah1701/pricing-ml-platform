@@ -36,12 +36,16 @@ def test_registration_preserves_existing_champion(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(module.mlflow, "set_tracking_uri", Mock())
     monkeypatch.setattr(module.mlflow, "register_model", Mock(return_value=SimpleNamespace(version="8")))
     monkeypatch.setattr(module, "update_training_attempt", Mock())
+    summary = Mock()
+    monkeypatch.setattr(module, "record_training_attempt_summary", summary)
     alias = Mock()
     monkeypatch.setattr(module, "tag_version_before_alias", alias)
     backup = Mock()
     monkeypatch.setattr(module, "persist_if_configured", backup)
     candidate: dict[str, Any] = {
-        "mae": 1.0, "artifact_reload_verified": True,
+        "mae": 1.0, "rmse": 2.0, "r2": 0.9,
+        "model_name": "catboost_price_ensemble_candidate",
+        "artifact_reload_verified": True,
         "model_uri": "runs:/test/model", "run_id": "test",
         "training_attempt_id": "test", "release_bundle_id": "a" * 64,
         "code_sha256": "b" * 64, "dataset_sha256": "c" * 64,
