@@ -59,10 +59,11 @@ https://github.com/user-attachments/assets/5f17e3db-6a54-43fc-8e81-f1077c602f9e
 The dataset limited how far the model could be optimised, so I prioritised
 reliable scaling, observability, and rollback over marginal model gains. Dedicated
 on-demand capacity and highly available services improved resilience, but added
-cost and operational complexity. I learned that models can drift or fail under
-load, making it essential to validate weights, features, and serving behaviour at
-scale. DevOps practices made each ML lifecycle stage observable, recoverable, and
-safe to roll back.
+cost and operational complexity. I learned that models can drift from training
+data or fail under load, making it essential to validate model weights, features,
+and serving behaviour at scale. DevOps practices made the ML lifecycle—from data
+and training through deployment and monitoring—observable, recoverable, and safe
+to roll back when something goes wrong.
 
 ## 1. Prerequisites — tools and accounts
 
