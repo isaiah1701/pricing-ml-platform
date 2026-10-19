@@ -6,6 +6,7 @@ import logging
 import subprocess
 import tarfile
 from pathlib import Path
+from unittest.mock import Mock
 
 import mlflow
 import numpy as np
@@ -22,10 +23,35 @@ from training.registry import tag_version_before_alias
 from training.train import (
     create_training_attempt,
     log_model_run,
+    record_training_attempt_summary,
     update_training_attempt,
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def test_training_attempt_summary_logs_parent_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Log parent summary metrics and parameters through the supported client API."""
+    client = Mock()
+    monkeypatch.setattr("training.train.MlflowClient", Mock(return_value=client))
+
+    record_training_attempt_summary(
+        "http://mlflow.test:5000",
+        "parent-run",
+        candidate_count=2,
+        winning_model_name="catboost_price_ensemble_candidate",
+        winning_metrics={"mae": 1.0, "rmse": 2.0, "r2": 0.5},
+        dataset_sha256="d" * 64,
+        registered_model_name="airbnb-price-predictor",
+        registered_model_version="2",
+        winning_child_run_id="child-run",
+    )
+
+    assert client.log_metric.call_count == 3
+    assert client.log_param.call_count == 6
+    client.set_tags.assert_called_once()
 
 
 def _git(repository: Path, *arguments: str) -> None:

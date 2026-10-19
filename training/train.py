@@ -461,25 +461,21 @@ def record_training_attempt_summary(
         LOGGER.error("Training attempt summary is missing winning metrics")
         raise ValueError("winning_metrics must include mae, rmse, and r2")
     client = MlflowClient(tracking_uri=tracking_uri)
-    client.log_metrics(
-        run_id,
-        {
-            "winning_mae": float(winning_metrics["mae"]),
-            "winning_rmse": float(winning_metrics["rmse"]),
-            "winning_r2": float(winning_metrics["r2"]),
-        },
-    )
-    client.log_params(
-        run_id,
-        {
-            "candidate_count": candidate_count,
-            "winning_model_name": winning_model_name,
-            "dataset_sha256": dataset_sha256,
-            "registered_model_name": registered_model_name,
-            "registered_model_version": registered_model_version,
-            "winning_child_run_id": winning_child_run_id,
-        },
-    )
+    for key, value in {
+        "winning_mae": float(winning_metrics["mae"]),
+        "winning_rmse": float(winning_metrics["rmse"]),
+        "winning_r2": float(winning_metrics["r2"]),
+    }.items():
+        client.log_metric(run_id, key, value)
+    for key, value in {
+        "candidate_count": candidate_count,
+        "winning_model_name": winning_model_name,
+        "dataset_sha256": dataset_sha256,
+        "registered_model_name": registered_model_name,
+        "registered_model_version": registered_model_version,
+        "winning_child_run_id": winning_child_run_id,
+    }.items():
+        client.log_param(run_id, key, value)
     client.set_tags(
         run_id,
         {
