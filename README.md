@@ -37,6 +37,10 @@ environment is stopped.
 - [Airflow](https://airflow.platf0rm.site)
 - [MLflow](https://mlflow.platf0rm.site)
 
+### Architecture overview
+
+![Production ML platform architecture](media/MLArchitectureDiagram.png)
+
 ## Evidence and demos
 
 | Deployment control | Experiment evidence | Monitoring evidence |

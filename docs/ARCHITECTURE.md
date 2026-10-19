@@ -1,5 +1,12 @@
 # Architecture
 
+## Architecture overview
+
+![Production ML platform architecture](../media/MLArchitectureDiagram.png)
+
+The diagram summarises the build and deployment path, AWS production platform,
+and model lifecycle feedback loop described below.
+
 ## Model lifecycle: training to production
 
 The platform treats a model release as a governed lifecycle rather than a
