@@ -1,3 +1,4 @@
+# Production image build, scan, publish, and GitOps promotion.
 name: Docker
 on:
   pull_request:
