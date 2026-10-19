@@ -35,6 +35,7 @@ from training.train import (
     TEST_SIZE,
     CatBoostPriceEnsembleRegressor,
     build_training_dataset,
+    configure_mlflow_tracking,
     create_training_attempt,
     evaluate_segments,
     get_dataset_version,
@@ -362,8 +363,10 @@ def log_models_to_mlflow(evaluation: EvaluationResult) -> LoggedCandidate:
         MLFLOW_TRACKING_URI, evaluation["training_attempt_id"], "logging_models"
     )
     trained = _read_pickle(Path(evaluation["artifact_path"]))
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT_NAME", EXPERIMENT_NAME))
+    configure_mlflow_tracking(
+        MLFLOW_TRACKING_URI,
+        os.getenv("MLFLOW_EXPERIMENT_NAME", EXPERIMENT_NAME),
+    )
     common_report: dict[str, object] = {
         "dataset_validation": evaluation["validation_report"],
         "evaluation_artifact": evaluation["evaluation_path"],

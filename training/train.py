@@ -402,11 +402,10 @@ def create_training_attempt(
     pipeline_name: str,
 ) -> str:
     """Create a parent MLflow run before any fallible training work begins."""
-    mlflow.set_tracking_uri(tracking_uri)
-    experiment = mlflow.set_experiment(experiment_name)
+    experiment_id = configure_mlflow_tracking(tracking_uri, experiment_name)
     client = MlflowClient(tracking_uri=tracking_uri)
     created = client.create_run(
-        experiment.experiment_id,
+        experiment_id,
         tags={
             "mlflow.runName": f"{pipeline_name}_attempt",
             "run_type": "training_attempt",
@@ -417,6 +416,37 @@ def create_training_attempt(
     )
     LOGGER.info("Created training-attempt run %s", created.info.run_id)
     return str(created.info.run_id)
+
+
+def configure_mlflow_tracking(tracking_uri: str, experiment_name: str) -> str:
+    """Configure MLflow and validate the selected hosted experiment."""
+    if not tracking_uri.strip():
+        LOGGER.error("MLflow tracking URI is empty")
+        raise ValueError("MLflow tracking URI cannot be empty")
+    if not experiment_name.strip():
+        LOGGER.error("MLflow experiment name is empty")
+        raise ValueError("MLflow experiment name cannot be empty")
+
+    mlflow.set_tracking_uri(tracking_uri)
+    experiment = mlflow.set_experiment(experiment_name)
+    configured_id = os.getenv("MLFLOW_EXPERIMENT_ID", "").strip()
+    if configured_id and experiment.experiment_id != configured_id:
+        LOGGER.error(
+            "MLflow experiment mismatch: expected %s, resolved %s for %s",
+            configured_id,
+            experiment.experiment_id,
+            experiment_name,
+        )
+        raise RuntimeError(
+            "MLflow resolved the training experiment to an unexpected ID: "
+            f"expected {configured_id}, got {experiment.experiment_id}"
+        )
+    LOGGER.info(
+        "Configured MLflow tracking URI and experiment %s (%s)",
+        experiment_name,
+        experiment.experiment_id,
+    )
+    return str(experiment.experiment_id)
 
 
 def update_training_attempt(
@@ -627,7 +657,10 @@ def log_model_run(
     """Log a fitted model and provenance, then verify artifact reload."""
     from training.provenance import sha256_directory
 
-    with mlflow.start_run(run_name=run_name) as run:
+    with mlflow.start_run(
+        experiment_id=os.getenv("MLFLOW_EXPERIMENT_ID") or None,
+        run_name=run_name,
+    ) as run:
         tags = {
             "model_family": model_family,
             "baseline": str(baseline).lower(),
@@ -698,6 +731,12 @@ def log_model_run(
             "release_bundle_id": bundle_id,
         }
         mlflow.log_dict(report, "evaluation_report.json")
+        client = MlflowClient(tracking_uri=mlflow.get_tracking_uri())
+        persisted = client.get_run(run.info.run_id)
+        if persisted.info.experiment_id != run.info.experiment_id:
+            LOGGER.error("MLflow run %s was persisted in the wrong experiment", run.info.run_id)
+            raise RuntimeError("MLflow run was persisted in the wrong experiment")
+        LOGGER.info("Verified MLflow run %s is readable after logging", run.info.run_id)
         return report
 
 
@@ -720,7 +759,10 @@ def train_and_log_champion(
     predictions = model.predict(x_test)
     metrics = evaluate_segments(x_test, y_test, predictions)
     LOGGER.info("Champion metrics: %s", metrics)
-    with mlflow.start_run(run_name="catboost_price_ensemble_champion") as run:
+    with mlflow.start_run(
+        experiment_id=os.getenv("MLFLOW_EXPERIMENT_ID") or None,
+        run_name="catboost_price_ensemble_champion",
+    ) as run:
         tags = {
             "champion": "true",
             "promotion_status": "champion",
@@ -792,6 +834,12 @@ def train_and_log_champion(
             "release_bundle_id": bundle_id,
         }
         mlflow.log_dict(report, "report.json")
+        client = MlflowClient(tracking_uri=mlflow.get_tracking_uri())
+        persisted = client.get_run(run.info.run_id)
+        if persisted.info.experiment_id != run.info.experiment_id:
+            LOGGER.error("MLflow run %s was persisted in the wrong experiment", run.info.run_id)
+            raise RuntimeError("MLflow run was persisted in the wrong experiment")
+        LOGGER.info("Verified MLflow run %s is readable after logging", run.info.run_id)
         return report
 
 

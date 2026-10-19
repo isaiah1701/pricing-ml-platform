@@ -47,6 +47,8 @@ data:
   AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://localhost:8080/execution/
   AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
   MLFLOW_TRACKING_URI: http://mlflow.mlflow.svc.cluster.local:5000
+  MLFLOW_EXPERIMENT_NAME: airbnb-price-prediction
+  MLFLOW_EXPERIMENT_ID: "1"
   MLFLOW_DISABLE_AGENT_HINT: "1"
   PROMETHEUS_PUSHGATEWAY_URL: http://prometheus-pushgateway.monitoring.svc.cluster.local:9091
   PLATFORM_DATA_BUCKET: {{ required "platform.airflow.dataBucket is required" $airflow.dataBucket | quote }}
