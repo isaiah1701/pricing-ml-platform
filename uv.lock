@@ -5194,19 +5194,7 @@ wheels = [
 ]
 
 [[package]]
-name = "prison"
-version = "0.2.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "six" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/50/65/4456caa4e9bbd1d4d4b5eecaea41bb2cd31efe0e7e423c7a9ad8e2be75ea/prison-0.2.1.tar.gz", hash = "sha256:e6cd724044afcb1a8a69340cad2f1e3151a5839fd3a8027fd1357571e797c599", size = 12040, upload-time = "2021-08-26T18:58:48.128Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f1/bd/e55e14cd213174100be0353824f2add41e8996c6f32081888897e8ec48b5/prison-0.2.1-py2.py3-none-any.whl", hash = "sha256:f90bab63fca497aa0819a852f64fb21a4e181ed9f6114deaa5dc04001a7555c5", size = 5794, upload-time = "2021-08-26T18:58:46.254Z" },
-]
-
-[[package]]
-name = "prod-mlops-platform"
+name = "pricing-ml-platform"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
@@ -5268,6 +5256,18 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30,<1" },
 ]
 provides-extras = ["test", "orchestration"]
+
+[[package]]
+name = "prison"
+version = "0.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/50/65/4456caa4e9bbd1d4d4b5eecaea41bb2cd31efe0e7e423c7a9ad8e2be75ea/prison-0.2.1.tar.gz", hash = "sha256:e6cd724044afcb1a8a69340cad2f1e3151a5839fd3a8027fd1357571e797c599", size = 12040, upload-time = "2021-08-26T18:58:48.128Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/bd/e55e14cd213174100be0353824f2add41e8996c6f32081888897e8ec48b5/prison-0.2.1-py2.py3-none-any.whl", hash = "sha256:f90bab63fca497aa0819a852f64fb21a4e181ed9f6114deaa5dc04001a7555c5", size = 5794, upload-time = "2021-08-26T18:58:46.254Z" },
+]
 
 [[package]]
 name = "prometheus-client"
