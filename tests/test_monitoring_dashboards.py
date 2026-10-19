@@ -83,7 +83,7 @@ def test_dashboard_configmap_and_scrape_label_contract() -> None:
         and item["metadata"]["name"] == "airbnb-mlops-dashboards"
     )
     assert config["metadata"]["labels"]["grafana_dashboard"] == "1"
-    assert len(config["data"]) == 4
+    assert len(config["data"]) == 5
     for name, contents in config["data"].items():
         assert json.loads(contents) == json.loads(
             (PROJECT_ROOT / "monitoring/grafana/dashboards" / name).read_text()
@@ -102,13 +102,14 @@ def test_dashboard_configmap_and_scrape_label_contract() -> None:
 
 
 def test_dashboard_views_keep_offline_quality_and_unknown_states_explicit() -> None:
-    """Require all four operator views and distinguish unavailable from healthy accuracy."""
+    """Require all operator views and distinguish unavailable from healthy accuracy."""
     documents = [
         json.loads(path.read_text())
         for path in (PROJECT_ROOT / 'monitoring/grafana/dashboards').glob('*.json')
     ]
     assert {document['title'] for document in documents} == {
-        'Model Inference', 'Model Quality & Drift', 'Pipeline Health', 'Kubernetes & Delivery'
+        'Inference Load Test', 'Model Inference', 'Model Quality & Drift',
+        'Pipeline Health', 'Kubernetes & Delivery'
     }
     quality = next(document for document in documents if document['uid'] == 'airbnb-model-drift')
     delayed = next(panel for panel in quality['panels'] if panel['title'].startswith('Delayed outcome MAE'))

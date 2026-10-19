@@ -11,6 +11,8 @@ data:
 {{ .Files.Get "files/dashboards/airbnb-pricing-business-metrics.json" | nindent 4 }}
   infrastructure-service-health.json: |-
 {{ .Files.Get "files/dashboards/infrastructure-service-health.json" | nindent 4 }}
+  inference-load-test.json: |-
+{{ .Files.Get "files/dashboards/inference-load-test.json" | nindent 4 }}
   model-drift-health.json: |-
 {{ .Files.Get "files/dashboards/model-drift-health.json" | nindent 4 }}
   pipeline-health.json: |-
