@@ -71,6 +71,7 @@ MLFLOW_TRACKING_URI = os.getenv(
 MAE_THRESHOLD = float(os.getenv("MODEL_REGISTRATION_MAE_THRESHOLD", "75.0"))
 REGISTERED_MODEL_NAME = os.getenv("MODEL_NAME", "airbnb-price-predictor")
 MODEL_ALIAS = os.getenv("MODEL_ALIAS", "champion")
+CANDIDATE_MODEL_COUNT = 2
 
 
 class RetrievalResult(TypedDict):
@@ -493,7 +494,7 @@ def conditional_registration(candidate: LoggedCandidate) -> dict[str, str]:
     record_training_attempt_summary(
         MLFLOW_TRACKING_URI,
         candidate["training_attempt_id"],
-        candidate_count=2,
+        candidate_count=CANDIDATE_MODEL_COUNT,
         winning_model_name=candidate["model_name"],
         winning_metrics={
             "mae": candidate["mae"],
