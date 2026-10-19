@@ -38,7 +38,7 @@ statuses.
 |---|---|---|
 | Platform walkthrough | Training, approval, release, and serving | Shows how a governed model becomes a production prediction. |
 | Grafana dashboards | Service health, latency, capacity, drift, and quality | Gives operators one view for fast, evidence-based action. |
-| [Load-testing walkthrough](https://github.com/user-attachments/assets/baff8398-9597-4f9f-891f-46a1b64b5808) | k6 baseline traffic and autoscaling response | Shows how serving capacity and latency behave under sustained load. |
+| [Load-testing walkthrough](https://github.com/user-attachments/assets/c6ad3cd4-327e-4fe3-8132-602e1ecc0327) | k6 baseline traffic and autoscaling response | Shows how serving capacity and latency behave under sustained load. |
 
 #### Grafana dashboards
 
